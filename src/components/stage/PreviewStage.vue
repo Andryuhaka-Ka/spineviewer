@@ -24,8 +24,8 @@ import { useVersionStore } from '@/core/stores/useVersionStore'
 import { useViewerStore } from '@/core/stores/useViewerStore'
 import { useSkeletonStore } from '@/core/stores/useSkeletonStore'
 import { useAnimationStore } from '@/core/stores/useAnimationStore'
-import type { IPixiApp } from '@/core/types/IPixiApp'
-import type { ISpineAdapter } from '@/core/types/ISpineAdapter'
+import type { IPixiApp, ITrackOverlay } from '@/core/types/IPixiApp'
+import type { ISpineAdapter, TrackState } from '@/core/types/ISpineAdapter'
 import type { FileSet } from '@/core/types/FileSet'
 
 const versionStore   = useVersionStore()
@@ -49,6 +49,7 @@ const fpsClass = computed(() => {
 
 let pixiApp: IPixiApp | null = null
 let spineAdapter: ISpineAdapter | null = null
+let trackOverlay: ITrackOverlay | null = null
 let tickerFn: ((dt: number) => void) | null = null
 
 onMounted(async () => {
@@ -64,11 +65,15 @@ onMounted(async () => {
       Math.max(height, 1),
     )
 
+    trackOverlay = pixiApp.createTrackOverlay()
+    trackOverlay.resize(width, height)
+
     tickerFn = () => {
       fps.value = Math.round(pixiApp!.ticker.FPS)
       if (spineAdapter) {
         const states = spineAdapter.getTrackStates()
         animationStore.setTracks(states)
+        trackOverlay?.updateText(states.length > 0 ? buildOverlayText(states, animationStore.trackEnabled) : '')
 
         // Keep disabled looped tracks frozen even after queue advances (new entry resets timeScale=1)
         for (const state of states) {
@@ -156,16 +161,40 @@ onMounted(async () => {
 
 onUnmounted(() => {
   if (pixiApp && tickerFn) pixiApp.ticker.remove(tickerFn)
+  trackOverlay?.destroy()
   spineAdapter?.destroy()
   pixiApp?.destroy()
   pixiApp = null
   spineAdapter = null
+  trackOverlay = null
 })
 
 useResizeObserver(containerRef, ([entry]) => {
   const { width, height } = entry.contentRect
-  if (width > 0 && height > 0) pixiApp?.resize(width, height)
+  if (width > 0 && height > 0) {
+    pixiApp?.resize(width, height)
+    trackOverlay?.resize(width, height)
+  }
 })
+
+// ── Track overlay helpers ─────────────────────────────────────────────────────
+
+function buildBar(pct: number, len = 10): string {
+  const filled = Math.round(Math.max(0, Math.min(1, pct)) * len)
+  return '█'.repeat(filled) + '░'.repeat(len - filled)
+}
+
+function buildOverlayText(states: TrackState[], enabledMap: Record<number, boolean>): string {
+  return states.map(t => {
+    const enabled = enabledMap[t.trackIndex] !== false
+    const time = t.loop ? t.time % t.duration : Math.min(t.time, t.duration)
+    const pct = t.duration > 0 ? time / t.duration : 0
+    const bar = buildBar(pct)
+    const tags = [t.loop ? 'loop' : '', !enabled ? 'paused' : ''].filter(Boolean).join(' ')
+    const name = t.animationName.length > 22 ? t.animationName.slice(0, 21) + '…' : t.animationName.padEnd(22)
+    return `#${t.trackIndex}  ${name}  ${time.toFixed(2)}s/${t.duration.toFixed(2)}s  [${bar}]${tags ? '  ' + tags : ''}`
+  }).join('\n')
+}
 
 // ── Public API ───────────────────────────────────────────────────────────────
 
@@ -234,7 +263,10 @@ defineExpose({
     animationStore.appendToTrackPlaylist(track, name, loop)
     spineAdapter?.addAnimation(track, name, loop)
   },
-  setTrackLoop: (track: number, loop: boolean) => spineAdapter?.setTrackLoop(track, loop),
+  setTrackLoop: (track: number, loop: boolean) => {
+    spineAdapter?.setTrackLoop(track, loop)
+    animationStore.updateTrackPlaylistFirstLoop(track, loop)
+  },
   removeQueueEntry: (track: number, index: number) => {
     // index+1 because playlist[0] is the currently playing entry
     animationStore.removeFromTrackPlaylist(track, index + 1)
@@ -244,12 +276,14 @@ defineExpose({
     animationStore.clearTrackPlaylist(track)
     spineAdapter?.clearTrack(track)
     if (Object.keys(animationStore.trackPlaylists).length === 0) {
+      spineAdapter?.setToSetupPose()
       animationStore.stop()
     }
   },
   clearTracks: () => {
     animationStore.clearAllTrackPlaylists()
     spineAdapter?.clearTracks()
+    spineAdapter?.setToSetupPose()
     animationStore.stop()
   },
   seekDelta:    (track: number, delta: number) => {

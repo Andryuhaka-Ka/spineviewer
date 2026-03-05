@@ -56,6 +56,15 @@ export const useAnimationStore = defineStore('animation', () => {
     trackPlaylists.value = {}
   }
 
+  function updateTrackPlaylistFirstLoop(trackIndex: number, loop: boolean) {
+    const playlist = trackPlaylists.value[trackIndex]
+    if (!playlist || playlist.length === 0) return
+    trackPlaylists.value = {
+      ...trackPlaylists.value,
+      [trackIndex]: [{ ...playlist[0], loop }, ...playlist.slice(1)],
+    }
+  }
+
   function setTracks(newTracks: TrackState[]) {
     tracks.value = newTracks
   }
@@ -94,7 +103,7 @@ export const useAnimationStore = defineStore('animation', () => {
     trackEnabled, trackPlaylists,
     isTrackEnabled, setTrackEnabled,
     setTrackPlaylist, appendToTrackPlaylist, removeFromTrackPlaylist,
-    clearTrackPlaylist, clearAllTrackPlaylists,
+    clearTrackPlaylist, clearAllTrackPlaylists, updateTrackPlaylistFirstLoop,
     setTracks, pause, stop, play, reset,
   }
 })

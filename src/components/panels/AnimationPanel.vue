@@ -65,12 +65,12 @@
         <n-button
           size="small"
           :disabled="!skeletonStore.isLoaded"
-          @click="emit('seekDelta', animationStore.currentTrack, -1 / 60)"
+          @click="seekAllDelta(-1 / 60)"
         >← 1f</n-button>
         <n-button
           size="small"
           :disabled="!skeletonStore.isLoaded"
-          @click="emit('seekDelta', animationStore.currentTrack, 1 / 60)"
+          @click="seekAllDelta(1 / 60)"
         >1f →</n-button>
       </div>
     </section>
@@ -149,18 +149,6 @@
         <div class="track-entry track-entry--current">
           <span class="entry-icon">▶</span>
           <span class="entry-name">{{ track.animationName }}</span>
-          <span class="entry-time">{{ trackTimeLabel(track) }}</span>
-        </div>
-        <div class="track-progress-wrap">
-          <n-progress
-            type="line"
-            :percentage="trackPercent(track)"
-            :show-indicator="false"
-            :height="3"
-            :border-radius="2"
-            :color="track.trackIndex === animationStore.currentTrack ? '#4ade80' : '#3b82f6'"
-            :rail-color="'#1e1e24'"
-          />
         </div>
 
         <!-- Queued entries -->
@@ -188,7 +176,6 @@ import type { CascaderOption } from 'naive-ui'
 import { useSkeletonStore } from '@/core/stores/useSkeletonStore'
 import { useAnimationStore } from '@/core/stores/useAnimationStore'
 import { buildCascaderOptions } from '@/core/utils/buildCascaderOptions'
-import type { TrackState } from '@/core/types/ISpineAdapter'
 
 const emit = defineEmits<{
   setAnimation:     [track: number, name: string, loop: boolean]
@@ -218,6 +205,12 @@ function isTrackRunning(index: number): boolean {
   return animationStore.tracks.some(t => t.trackIndex === index)
 }
 
+function seekAllDelta(delta: number) {
+  for (const track of animationStore.tracks) {
+    emit('seekDelta', track.trackIndex, delta)
+  }
+}
+
 function onCascaderSelect(value: string | number | Array<string | number> | null) {
   const name = typeof value === 'string' ? value : null
   if (!name) return
@@ -228,18 +221,6 @@ function onCascaderSelect(value: string | number | Array<string | number> | null
   }
 }
 
-function trackPercent(track: TrackState): number {
-  if (!track.duration) return 0
-  const t = track.loop
-    ? (track.time % track.duration) / track.duration
-    : Math.min(1, track.time / track.duration)
-  return Math.round(t * 100)
-}
-
-function trackTimeLabel(track: TrackState): string {
-  const cur = track.loop ? track.time % track.duration : Math.min(track.time, track.duration)
-  return `${cur.toFixed(2)}s / ${track.duration.toFixed(2)}s`
-}
 </script>
 
 <style scoped>
@@ -417,11 +398,6 @@ function trackTimeLabel(track: TrackState): string {
   background: #111113;
 }
 
-.track-progress-wrap {
-  padding: 0 8px 5px;
-  background: #141416;
-}
-
 .entry-icon {
   font-size: 0.6rem;
   color: #444;
@@ -439,11 +415,4 @@ function trackTimeLabel(track: TrackState): string {
 
 .track-entry--current .entry-name { color: #ccc; }
 .track-entry--queued  .entry-name { color: #555; }
-
-.entry-time {
-  color: #555;
-  font-variant-numeric: tabular-nums;
-  flex-shrink: 0;
-  font-size: 0.7rem;
-}
 </style>

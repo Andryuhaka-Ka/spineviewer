@@ -89,6 +89,9 @@ export interface ISpineAdapter {
   clearTrack(track: number): void;
   clearTracks(): void;
   setTimeScale(scale: number): void;
+  setTrackTimeScale(track: number, scale: number): void;  // per-track freeze/resume
+  setTrackLoop(track: number, loop: boolean): void;
+  removeQueueEntry(track: number, index: number): void;   // removes entry from TrackEntry.next chain
   seekTo(track: number, time: number): void;
 
   // Skeleton
@@ -99,7 +102,7 @@ export interface ISpineAdapter {
   setSlotsToSetupPose(): void;
 
   // Live data (called each frame by ticker)
-  getTrackStates(): TrackState[];
+  getTrackStates(): TrackState[];         // TrackState includes queue: TrackQueueEntry[]
   getBoneTransforms(): BoneTransform[];
   getActiveAttachments(): AttachmentInfo[];
 
@@ -384,24 +387,51 @@ export function buildImageResolver(images: SpineFile[]) {
 
 ### Задачі
 
-- [ ] `src/core/stores/useAnimationStore.ts`:
+- [x] `src/core/stores/useAnimationStore.ts`:
   ```typescript
-  const tracks = ref<TrackState[]>([]);   // live state per track
-  const speed = ref(1);
-  const loop = ref(false);
-  const currentTrack = ref(0);
-  const isPlaying = ref(true);
+  const tracks        = ref<TrackState[]>([])           // live state per track (updated each tick)
+  const speed         = ref(1)                          // 0.0–3.0
+  const loop          = ref(false)                      // default loop for cascader selections
+  const currentTrack  = ref(0)                          // selected track (0–11)
+  const isPlaying     = ref(false)
+  const isPaused      = ref(false)                      // true = frozen mid-animation
+  const trackEnabled  = ref<Record<number, boolean>>({}) // absent/true = enabled, false = disabled
+  const trackPlaylists = ref<Record<number, TrackQueueEntry[]>>({}) // master playlist per track
+
+  // Actions: play(), pause(), stop(), setTrackEnabled(), isTrackEnabled()
+  // Playlist: setTrackPlaylist(), appendToTrackPlaylist(), removeFromTrackPlaylist(),
+  //           clearTrackPlaylist(), clearAllTrackPlaylists()
   ```
-- [ ] `AnimationPanel.vue` (shared):
+  **Play/Pause/Stop state machine:**
+  - `play()` → якщо не isPaused: відновлює послідовності з trackPlaylists у Spine; якщо isPaused: лише знімає timeScale=0
+  - `pause()` → timeScale=0, isPaused=true
+  - `stop()` → timeScale=0, isPaused=false (авто: всі треки завершились без loop/queue; або clearTracks)
+
+- [x] `AnimationPanel.vue`:
   - Cascader з анімаціями (групування за `/` в назві)
-  - Треки 0–11 radio, кнопки Set / Add / Clear
-  - Speed: slider 0–3 + число
-  - Loop toggle
-  - Shift ← → (±1/60s)
-  - Play/Pause
-  - Progress bar + `Xs / Ys`
-- [ ] `ISpineAdapter` — `setTimeScale`, `seekTo`, `getTrackStates` вже в контракті
-- [ ] `PreviewStage.vue` — tick loop читає `adapter.getTrackStates()` → `useAnimationStore`
+  - Треки 0–11 (сітка 6×2): зелений = active, синій = running
+  - **Add mode** toggle — OFF: setAnimation, ON: addAnimation (додає в чергу)
+  - Play / ⏸ Pause / ▶ Resume (один елемент, три стани)
+  - ← 1f / 1f → — seek ±1/60s для **всіх активних треків одразу**
+  - Loop (global default для cascader), Speed 0–3×
+  - **Active tracks** — блочний список:
+    - Хедер блоку: enabled checkbox, loop checkbox (per-track), #N, ✕ (clearTrack)
+    - Поточна анімація: ▶ + назва (без прогрес-бару в HTML)
+    - Черга: ⏭ + назва + ✕ (removeQueueEntry)
+    - Clear All поруч із заголовком секції → clearTracks + setToSetupPose
+  - Прогрес анімацій **не в HTML** — відображається в Pixi overlay (див. нижче)
+
+- [x] `PreviewStage.vue` — ticker:
+  - Читає `adapter.getTrackStates()` → `animationStore.setTracks()`
+  - Заморожує disabled looped треки через `setTrackTimeScale(track, 0)`
+  - Авто-стоп: `!hasLoop && !hasQueue && all tracks at end`
+  - `setToSetupPose()` при clearTracks (і clearTrack якщо останній трек)
+
+- [ ] **Pixi track overlay** (`PreviewStage.vue` ticker, `PIXI.Text`):
+  - Лівий нижній кут canvas, моноширинний шрифт ~12px
+  - Один рядок на трек: `#N  <назва>  <time>s / <duration>s  [████░░]  [loop]`
+  - Вимкнений трек: знижена яскравість / мітка `[paused]`
+  - Оновлюється прямо в tickerFn без Vue — 100% синхронно з рендером
 
 ---
 

@@ -1,5 +1,5 @@
 import * as PIXI from 'pixi7'
-import type { IPixiApp, PixiTicker } from '@/core/types/IPixiApp'
+import type { IPixiApp, ITrackOverlay, PixiTicker } from '@/core/types/IPixiApp'
 
 export class Pixi7App implements IPixiApp {
   private readonly _app: PIXI.Application
@@ -32,6 +32,25 @@ export class Pixi7App implements IPixiApp {
     // PIXI 7.3+ uses renderer.background.color
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ;(this._app.renderer as any).background.color = color
+  }
+
+  createTrackOverlay(): ITrackOverlay {
+    const text = new PIXI.Text('', new PIXI.TextStyle({
+      fontFamily: 'monospace',
+      fontSize: 11,
+      fill: 0xffffff,
+      lineHeight: 16,
+    }))
+    text.alpha = 0.75
+    text.anchor.set(0, 1)
+    text.x = 8
+    text.y = this._app.renderer.height - 8
+    this._app.stage.addChild(text)
+    return {
+      updateText: (s: string) => { text.text = s },
+      resize: (_w: number, h: number) => { text.y = h - 8 },
+      destroy: () => { this._app.stage.removeChild(text); text.destroy() },
+    }
   }
 
   destroy(): void {
