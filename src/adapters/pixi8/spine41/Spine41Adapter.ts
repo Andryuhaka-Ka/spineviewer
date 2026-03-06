@@ -21,6 +21,9 @@ export default class StubAdapter implements ISpineAdapter {
   clearTrack(_t: number): void { throw new Error('Not implemented') }
   clearTracks(): void { throw new Error('Not implemented') }
   setTimeScale(_s: number): void { throw new Error('Not implemented') }
+  setTrackTimeScale(_t: number, _s: number): void { throw new Error('Not implemented') }
+  setTrackLoop(_t: number, _l: boolean): void { throw new Error('Not implemented') }
+  removeQueueEntry(_t: number, _i: number): void { throw new Error('Not implemented') }
   seekTo(_t: number, _time: number): void { throw new Error('Not implemented') }
   setSkin(_n: string): void { throw new Error('Not implemented') }
   setSkins(_n: string[]): void { throw new Error('Not implemented') }

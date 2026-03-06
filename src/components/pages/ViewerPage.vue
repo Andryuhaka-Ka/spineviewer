@@ -28,6 +28,7 @@
               @clear-track="onClearTrack"
               @clear-tracks="onClearTracks"
               @seek-delta="onSeekDelta"
+              @set-skins="onSetSkins"
             />
           </n-tab-pane>
         </n-tabs>
@@ -90,6 +91,10 @@ function onClearTracks() {
 
 function onSeekDelta(track: number, delta: number) {
   stageRef.value?.seekDelta(track, delta)
+}
+
+function onSetSkins(names: string[]) {
+  stageRef.value?.setSkins(names)
 }
 </script>
 

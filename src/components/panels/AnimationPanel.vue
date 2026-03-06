@@ -104,6 +104,52 @@
 
     <n-divider style="margin: 6px 0" />
 
+    <!-- ── Skins ─────────────────────────────────────────── -->
+    <section class="section">
+      <div class="skins-header">
+        <label class="label">Skins</label>
+        <n-button
+          size="tiny"
+          :type="composerMode ? 'primary' : 'default'"
+          :disabled="!skeletonStore.isLoaded || skeletonStore.skins.length < 2"
+          @click="onToggleComposer"
+        >Composer</n-button>
+      </div>
+
+      <div v-if="skeletonStore.isLoaded && skeletonStore.skins.length === 0" class="empty-hint">
+        No skins
+      </div>
+
+      <div v-else-if="skeletonStore.isLoaded" class="skin-list">
+        <div
+          v-for="skin in skeletonStore.skins"
+          :key="skin"
+          class="skin-row"
+          @click="onSkinRowClick(skin)"
+        >
+          <n-radio
+            v-if="!composerMode"
+            size="small"
+            :checked="selectedSkin === skin"
+            :disabled="!skeletonStore.isLoaded"
+            @change.stop="onSingleSkinSelect(skin)"
+          />
+          <n-checkbox
+            v-else
+            size="small"
+            :checked="composerSkins.has(skin)"
+            :disabled="!skeletonStore.isLoaded"
+            @update:checked="toggleComposerSkin(skin, $event)"
+            @click.stop
+          />
+          <span class="skin-name">{{ skin }}</span>
+          <n-button size="tiny" class="copy-btn" @click.stop="copyName(skin)" title="Copy name">⎘</n-button>
+        </div>
+      </div>
+    </section>
+
+    <n-divider style="margin: 6px 0" />
+
     <!-- ── Active tracks ──────────────────────────────────── -->
     <section class="section">
       <div class="active-tracks-header">
@@ -185,12 +231,59 @@ const emit = defineEmits<{
   clearTrack:       [track: number]
   clearTracks:      []
   seekDelta:        [track: number, deltaSeconds: number]
+  setSkins:         [names: string[]]
 }>()
 
 const skeletonStore  = useSkeletonStore()
 const animationStore = useAnimationStore()
 
 const isAddMode = ref(false)
+
+// ── Skins state ────────────────────────────────────────────────────────────
+const composerMode  = ref(false)
+const selectedSkin  = ref<string | null>(null)
+const composerSkins = ref(new Set<string>())
+
+watch(() => skeletonStore.skins, () => {
+  selectedSkin.value  = null
+  composerSkins.value = new Set()
+  composerMode.value  = false
+})
+
+function onToggleComposer() {
+  if (!composerMode.value) {
+    composerSkins.value = selectedSkin.value ? new Set([selectedSkin.value]) : new Set()
+  } else {
+    const arr = [...composerSkins.value]
+    selectedSkin.value = arr.length === 1 ? arr[0] : null
+  }
+  composerMode.value = !composerMode.value
+}
+
+function onSkinRowClick(skin: string) {
+  if (composerMode.value) {
+    toggleComposerSkin(skin, !composerSkins.value.has(skin))
+  } else {
+    onSingleSkinSelect(skin)
+  }
+}
+
+function onSingleSkinSelect(skin: string) {
+  selectedSkin.value = skin
+  emit('setSkins', [skin])
+}
+
+function toggleComposerSkin(skin: string, checked: boolean) {
+  const next = new Set(composerSkins.value)
+  if (checked) next.add(skin)
+  else next.delete(skin)
+  composerSkins.value = next
+  emit('setSkins', [...next])
+}
+
+function copyName(name: string) {
+  navigator.clipboard.writeText(name).catch(() => {})
+}
 
 const cascaderOptions = computed<CascaderOption[]>(() =>
   buildCascaderOptions(skeletonStore.animations),
@@ -322,6 +415,69 @@ function onCascaderSelect(value: string | number | Array<string | number> | null
   min-width: 38px;
   text-align: right;
 }
+
+/* ── Skins ───────────────────────────────── */
+.skins-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.skin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 160px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a2e transparent;
+}
+
+.skin-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.skin-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.skin-list::-webkit-scrollbar-thumb {
+  background: #2a2a2e;
+  border-radius: 2px;
+}
+
+.skin-list::-webkit-scrollbar-thumb:hover {
+  background: #3a3a3e;
+}
+
+.skin-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.skin-row:hover { background: #1a1a1e; }
+
+.skin-name {
+  flex: 1;
+  font-size: 0.75rem;
+  color: #bbb;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.copy-btn {
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+.skin-row:hover .copy-btn { opacity: 1; }
 
 /* ── Active tracks ───────────────────────── */
 .active-tracks-header {

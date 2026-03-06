@@ -292,6 +292,10 @@ defineExpose({
     const clamped = Math.max(0, Math.min(entry.time + delta, entry.duration))
     spineAdapter.seekTo(track, clamped)
   },
+  setSkins: (names: string[]) => {
+    if (names.length === 0) return
+    spineAdapter?.setSkins(names)
+  },
 })
 </script>
 
