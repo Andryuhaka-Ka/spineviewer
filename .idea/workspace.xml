@@ -4,16 +4,12 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="76266a3f-c6bb-4d4e-a45c-2b17cdf27e49" name="Changes" comment="перший коміт">
+    <list default="true" id="76266a3f-c6bb-4d4e-a45c-2b17cdf27e49" name="Changes" comment="Другий коміт">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/PLAN.md" beforeDir="false" afterPath="$PROJECT_DIR$/PLAN.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/animation.md" beforeDir="false" afterPath="$PROJECT_DIR$/animation.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/adapters/pixi7/Pixi7App.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/adapters/pixi7/Pixi7App.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/adapters/pixi8/Pixi8App.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/adapters/pixi8/Pixi8App.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/adapters/pixi8/spine42/Spine42Adapter.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/adapters/pixi8/spine42/Spine42Adapter.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/components/panels/AnimationPanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/panels/AnimationPanel.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/components/stage/PreviewStage.vue" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/stage/PreviewStage.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/core/stores/useAnimationStore.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/stores/useAnimationStore.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/core/types/IPixiApp.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/types/IPixiApp.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/core/AdapterFactory.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/AdapterFactory.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/vite.config.ts" beforeDir="false" afterPath="$PROJECT_DIR$/vite.config.ts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -107,7 +103,7 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772542772095</updated>
-      <workItem from="1772542773282" duration="31736000" />
+      <workItem from="1772542773282" duration="36694000" />
     </task>
     <task id="LOCAL-00001" summary="перший коміт">
       <option name="closed" value="true" />
@@ -117,7 +113,15 @@
       <option name="project" value="LOCAL" />
       <updated>1772705114007</updated>
     </task>
-    <option name="localTasksCounter" value="2" />
+    <task id="LOCAL-00002" summary="Другий коміт">
+      <option name="closed" value="true" />
+      <created>1772720159220</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1772720159220</updated>
+    </task>
+    <option name="localTasksCounter" value="3" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -136,6 +140,7 @@
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="перший коміт" />
-    <option name="LAST_COMMIT_MESSAGE" value="перший коміт" />
+    <MESSAGE value="Другий коміт" />
+    <option name="LAST_COMMIT_MESSAGE" value="Другий коміт" />
   </component>
 </project>

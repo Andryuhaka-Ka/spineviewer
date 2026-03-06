@@ -12,7 +12,7 @@
         size="small"
         expand-trigger="click"
         :show-path="true"
-        :leaf-only="true"
+        check-strategy="child"
         clearable
         style="width: 100%"
         @update:value="onCascaderSelect"

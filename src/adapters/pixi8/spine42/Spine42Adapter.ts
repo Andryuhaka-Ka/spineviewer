@@ -5,6 +5,7 @@ import {
 } from '@esotericsoftware/spine-pixi-v8'
 import {
   TextureAtlas,
+  Skin,
   type AnimationStateListener,
 } from '@esotericsoftware/spine-core'
 import type {
@@ -29,11 +30,19 @@ export default class Spine42Adapter implements ISpineAdapter {
   // ── Load ───────────────────────────────────────────────────────────────────
 
   async load(fileSet: FileSet): Promise<void> {
-    // 1. Load PIXI 8 textures from DataURLs
+    // 1. Load images via HTMLImageElement first, then create Pixi 8 textures.
+    //    Texture.from(dataUrl) in Pixi v8 starts loading asynchronously and the
+    //    'loaded' event is named 'update' — skipping that entirely by pre-loading
+    //    the image guarantees tex.source.resource is set before SpineTexture.from().
     const textureMap = new Map<string, PIXI.Texture>()
     await Promise.all(fileSet.images.map(async img => {
-      const tex = PIXI.Texture.from(img.fileBody as string)
-      await waitForPixi8Texture(tex)
+      const htmlImg = new Image()
+      await new Promise<void>((resolve, reject) => {
+        htmlImg.onload = () => resolve()
+        htmlImg.onerror = () => reject(new Error(`Failed to load image: ${img.filename}`))
+        htmlImg.src = img.fileBody as string
+      })
+      const tex = PIXI.Texture.from(htmlImg)
       textureMap.set(img.filename, tex)
     }))
 
@@ -173,12 +182,10 @@ export default class Spine42Adapter implements ISpineAdapter {
   setSkins(names: string[]): void {
     if (!this._spine || names.length === 0) return
     if (names.length === 1) { this.setSkin(names[0]); return }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const combined = new (this._spine.skeleton.data.findSkin('default') as any).constructor('combined')
+    const combined = new Skin('combined')
     for (const name of names) {
       const skin = this._spine.skeleton.data.findSkin(name)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if (skin) (combined as any).addSkin(skin)
+      if (skin) combined.addSkin(skin)
     }
     this._spine.skeleton.setSkin(combined)
     this._spine.skeleton.setSlotsToSetupPose()
@@ -262,18 +269,6 @@ export default class Spine42Adapter implements ISpineAdapter {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
-
-async function waitForPixi8Texture(tex: PIXI.Texture): Promise<void> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const src = (tex as any).source
-  if (!src || src.loaded) return
-  await new Promise<void>((resolve, reject) => {
-    src.once('loaded', resolve)
-    src.once('error', () => reject(new Error('Texture load failed')))
-    // Fallback for DataURLs which may load synchronously
-    setTimeout(resolve, 2000)
-  })
-}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function classifyAttachment(att: any): AttachmentInfo['type'] {

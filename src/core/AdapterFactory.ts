@@ -17,6 +17,10 @@ export async function createPixiApp(
     const { Pixi7App } = await import('@/adapters/pixi7/Pixi7App')
     return new Pixi7App(canvas, w, h)
   }
+  // Register SpinePipe extension BEFORE initializing the Pixi8 Application.
+  // spine-pixi-v8's index.js calls extensions.add(SpinePipe) as a side effect,
+  // which must happen before app.init() so the renderer includes the 'spine' pipe.
+  await import('@esotericsoftware/spine-pixi-v8')
   const { Pixi8App } = await import('@/adapters/pixi8/Pixi8App')
   return Pixi8App.create(canvas, w, h)
 }

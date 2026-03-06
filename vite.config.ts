@@ -5,23 +5,26 @@ import Components from 'unplugin-vue-components/vite'
 import { NaiveUiResolver } from 'unplugin-vue-components/resolvers'
 import path from 'path'
 
-// Exact ESM entry for pixi.js@8 (our "pixi8" npm alias).
-const pixi8Entry = path.resolve(__dirname, 'node_modules/pixi8/lib/index.mjs')
-
 /**
  * Redirects `import … from 'pixi.js'` inside @esotericsoftware/* packages to
- * pixi8 (pixi.js@8), so the Spine 4.2 adapter and Pixi8App share one Pixi instance.
+ * the 'pixi8' alias (pixi.js@8), so the Spine 4.2 adapter and Pixi8App share
+ * one Pixi instance.
  *
- * enforce:'pre' is required — Vite's built-in node resolver runs before normal
- * plugins, so without it the hook is never reached for node_modules imports.
+ * Using this.resolve('pixi8') instead of a hardcoded path ensures the request
+ * goes through Vite's normal resolution (alias + optimizeDeps pre-bundle).
+ * This prevents eventemitter3 (CJS, nested inside pixi8/node_modules) from
+ * being served raw to the browser — it gets bundled by esbuild instead.
+ *
+ * enforce:'pre' is required so the hook runs before Vite's built-in resolver.
  */
 function spinePixi8Redirect(): Plugin {
   return {
     name: 'spine-pixi8-redirect',
     enforce: 'pre',
-    resolveId(id, importer) {
+    async resolveId(id, importer) {
       if (id === 'pixi.js' && importer?.includes('@esotericsoftware')) {
-        return pixi8Entry
+        const resolved = await this.resolve('pixi8', importer, { skipSelf: true })
+        return resolved
       }
     },
   }
@@ -48,8 +51,10 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    // Exclude from esbuild pre-bundling so Vite serves files directly and
-    // our resolveId hook (above) can redirect pixi.js → pixi8 in dev mode too.
+    // pixi8 must be pre-bundled so esbuild converts its CJS deps (eventemitter3)
+    // to ESM. Without this the raw CJS file is served to the browser and fails.
+    include: ['pixi8'],
+    // Exclude spine packages so their pixi.js imports reach our resolveId hook.
     exclude: ['@esotericsoftware/spine-pixi-v8', '@esotericsoftware/spine-core'],
   },
 })
