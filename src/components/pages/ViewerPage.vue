@@ -31,6 +31,9 @@
               @set-skins="onSetSkins"
             />
           </n-tab-pane>
+          <n-tab-pane name="inspector" tab="Inspector" class="tab-pane">
+            <SkeletonPanel />
+          </n-tab-pane>
         </n-tabs>
       </aside>
 
@@ -45,6 +48,7 @@
 import PreviewStage from '@/components/stage/PreviewStage.vue'
 import LoaderPanel from '@/components/panels/LoaderPanel.vue'
 import AnimationPanel from '@/components/panels/AnimationPanel.vue'
+import SkeletonPanel from '@/components/panels/SkeletonPanel.vue'
 import { useVersionStore } from '@/core/stores/useVersionStore'
 import { useSkeletonStore } from '@/core/stores/useSkeletonStore'
 import type { FileSet } from '@/core/types/FileSet'
@@ -54,7 +58,7 @@ const emit = defineEmits<{ back: [] }>()
 const versionStore  = useVersionStore()
 const skeletonStore = useSkeletonStore()
 const stageRef      = ref<InstanceType<typeof PreviewStage> | null>(null)
-const activeTab     = ref<'files' | 'animation'>('files')
+const activeTab     = ref<'files' | 'animation' | 'inspector'>('files')
 
 // Auto-switch to animation tab when a skeleton loads
 watch(() => skeletonStore.isLoaded, (loaded) => {

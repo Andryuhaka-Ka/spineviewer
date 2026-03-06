@@ -24,6 +24,7 @@ import { useVersionStore } from '@/core/stores/useVersionStore'
 import { useViewerStore } from '@/core/stores/useViewerStore'
 import { useSkeletonStore } from '@/core/stores/useSkeletonStore'
 import { useAnimationStore } from '@/core/stores/useAnimationStore'
+import { useInspectorStore } from '@/core/stores/useInspectorStore'
 import type { IPixiApp, ITrackOverlay } from '@/core/types/IPixiApp'
 import type { ISpineAdapter, TrackState } from '@/core/types/ISpineAdapter'
 import type { FileSet } from '@/core/types/FileSet'
@@ -32,6 +33,7 @@ const versionStore   = useVersionStore()
 const viewerStore    = useViewerStore()
 const skeletonStore  = useSkeletonStore()
 const animationStore = useAnimationStore()
+const inspectorStore = useInspectorStore()
 
 const containerRef = ref<HTMLDivElement | null>(null)
 const canvasRef    = ref<HTMLCanvasElement | null>(null)
@@ -51,6 +53,7 @@ let pixiApp: IPixiApp | null = null
 let spineAdapter: ISpineAdapter | null = null
 let trackOverlay: ITrackOverlay | null = null
 let tickerFn: ((dt: number) => void) | null = null
+let inspectorFrame = 0
 
 onMounted(async () => {
   const canvas    = canvasRef.value!
@@ -90,6 +93,12 @@ onMounted(async () => {
           if (!hasLoop && !hasQueue && states.every(t => t.duration > 0 && t.time >= t.duration - 0.02)) {
             animationStore.stop()
           }
+        }
+
+        // Inspector: throttle to ~10 fps (every 6 frames at 60fps)
+        if (++inspectorFrame >= 6) {
+          inspectorFrame = 0
+          inspectorStore.update(spineAdapter.getBoneTransforms(), spineAdapter.getActiveAttachments())
         }
       }
     }
@@ -167,6 +176,7 @@ onUnmounted(() => {
   pixiApp = null
   spineAdapter = null
   trackOverlay = null
+  inspectorStore.clear()
 })
 
 useResizeObserver(containerRef, ([entry]) => {
@@ -208,6 +218,7 @@ async function loadSpine(fileSet: FileSet): Promise<void> {
     spineAdapter = null
     skeletonStore.clear()
     animationStore.reset()
+    inspectorStore.clear()
   }
 
   loading.value = true
