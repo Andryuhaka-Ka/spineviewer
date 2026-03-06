@@ -25,6 +25,7 @@ import { useViewerStore } from '@/core/stores/useViewerStore'
 import { useSkeletonStore } from '@/core/stores/useSkeletonStore'
 import { useAnimationStore } from '@/core/stores/useAnimationStore'
 import { useInspectorStore } from '@/core/stores/useInspectorStore'
+import { useEventsStore } from '@/core/stores/useEventsStore'
 import type { IPixiApp, ITrackOverlay } from '@/core/types/IPixiApp'
 import type { ISpineAdapter, TrackState } from '@/core/types/ISpineAdapter'
 import type { FileSet } from '@/core/types/FileSet'
@@ -34,6 +35,7 @@ const viewerStore    = useViewerStore()
 const skeletonStore  = useSkeletonStore()
 const animationStore = useAnimationStore()
 const inspectorStore = useInspectorStore()
+const eventsStore    = useEventsStore()
 
 const containerRef = ref<HTMLDivElement | null>(null)
 const canvasRef    = ref<HTMLCanvasElement | null>(null)
@@ -177,6 +179,7 @@ onUnmounted(() => {
   spineAdapter = null
   trackOverlay = null
   inspectorStore.clear()
+  eventsStore.clear()
 })
 
 useResizeObserver(containerRef, ([entry]) => {
@@ -219,6 +222,7 @@ async function loadSpine(fileSet: FileSet): Promise<void> {
     skeletonStore.clear()
     animationStore.reset()
     inspectorStore.clear()
+    eventsStore.clear()
   }
 
   loading.value = true
@@ -254,6 +258,9 @@ async function loadSpine(fileSet: FileSet): Promise<void> {
       slots:      spineAdapter.slots,
       events:     spineAdapter.events,
     })
+
+    // Subscribe to Spine events (unsubscribed automatically via spineAdapter.destroy())
+    spineAdapter.onEvent(e => eventsStore.push(e))
   } catch (e) {
     spineError.value = e instanceof Error ? e.message : 'Failed to load Spine'
     console.error('[PreviewStage] loadSpine error:', e)
@@ -297,11 +304,14 @@ defineExpose({
     spineAdapter?.setToSetupPose()
     animationStore.stop()
   },
-  seekDelta:    (track: number, delta: number) => {
+  seekDelta: (track: number, delta: number) => {
     const entry = animationStore.tracks.find(t => t.trackIndex === track)
     if (!entry || !spineAdapter) return
     const clamped = Math.max(0, Math.min(entry.time + delta, entry.duration))
     spineAdapter.seekTo(track, clamped)
+  },
+  seekTo: (track: number, time: number) => {
+    spineAdapter?.seekTo(track, time)
   },
   setSkins: (names: string[]) => {
     if (names.length === 0) return

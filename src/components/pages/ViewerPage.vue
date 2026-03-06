@@ -6,6 +6,13 @@
         Pixi {{ versionStore.pixiVersion }} · Spine {{ versionStore.spineVersion }}
       </span>
       <div class="toolbar-spacer" />
+      <n-button
+        size="small"
+        :type="animationStore.isPlaying ? 'default' : 'primary'"
+        :disabled="!skeletonStore.isLoaded || animationStore.tracks.length === 0"
+        class="toolbar-play-btn"
+        @click="animationStore.isPlaying ? animationStore.pause() : animationStore.play()"
+      >{{ animationStore.isPlaying ? '⏸' : (animationStore.isPaused ? '▶ Resume' : '▶ Play') }}</n-button>
       <SettingsPopover />
     </header>
 
@@ -21,7 +28,7 @@
           <n-tab-pane name="files" tab="Files" class="tab-pane">
             <LoaderPanel @load="onFilesLoaded" />
           </n-tab-pane>
-          <n-tab-pane name="animation" tab="Animation" class="tab-pane">
+          <n-tab-pane name="animation" tab="Anim" class="tab-pane">
             <AnimationPanel
               @set-animation="onSetAnimation"
               @add-animation="onAddAnimation"
@@ -33,8 +40,11 @@
               @set-skins="onSetSkins"
             />
           </n-tab-pane>
-          <n-tab-pane name="inspector" tab="Inspector" class="tab-pane">
+          <n-tab-pane name="inspector" tab="Insp" class="tab-pane">
             <SkeletonPanel />
+          </n-tab-pane>
+          <n-tab-pane name="events" tab="Events" class="tab-pane">
+            <EventsPanel @seek="onSeekTo" />
           </n-tab-pane>
         </n-tabs>
       </aside>
@@ -51,17 +61,20 @@ import PreviewStage from '@/components/stage/PreviewStage.vue'
 import LoaderPanel from '@/components/panels/LoaderPanel.vue'
 import AnimationPanel from '@/components/panels/AnimationPanel.vue'
 import SkeletonPanel from '@/components/panels/SkeletonPanel.vue'
+import EventsPanel from '@/components/panels/EventsPanel.vue'
 import SettingsPopover from '@/components/ui/SettingsPopover.vue'
 import { useVersionStore } from '@/core/stores/useVersionStore'
 import { useSkeletonStore } from '@/core/stores/useSkeletonStore'
+import { useAnimationStore } from '@/core/stores/useAnimationStore'
 import type { FileSet } from '@/core/types/FileSet'
 
 const emit = defineEmits<{ back: [] }>()
 
-const versionStore  = useVersionStore()
-const skeletonStore = useSkeletonStore()
+const versionStore    = useVersionStore()
+const skeletonStore   = useSkeletonStore()
+const animationStore  = useAnimationStore()
 const stageRef      = ref<InstanceType<typeof PreviewStage> | null>(null)
-const activeTab     = ref<'files' | 'animation' | 'inspector'>('files')
+const activeTab     = ref<'files' | 'animation' | 'inspector' | 'events'>('files')
 
 // Auto-switch to animation tab when a skeleton loads
 watch(() => skeletonStore.isLoaded, (loaded) => {
@@ -103,6 +116,10 @@ function onSeekDelta(track: number, delta: number) {
 function onSetSkins(names: string[]) {
   stageRef.value?.setSkins(names)
 }
+
+function onSeekTo(track: number, time: number) {
+  stageRef.value?.seekTo(track, time)
+}
 </script>
 
 <style scoped>
@@ -123,6 +140,8 @@ function onSetSkins(names: string[]) {
 }
 
 .toolbar-spacer { flex: 1; }
+
+.toolbar-play-btn { min-width: 80px; }
 
 .back-btn {
   background: none;

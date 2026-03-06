@@ -51,7 +51,7 @@ src/
     │   ├── LoaderPanel.vue
     │   ├── AnimationPanel.vue
     │   ├── SkinsPanel.vue
-    │   ├── SkeletonInspector.vue
+    │   ├── SkeletonPanel.vue       # Step 7 — Inspector: кістки + активні attachments
     │   ├── EventsPanel.vue
     │   ├── AtlasInspector.vue
     │   ├── ProfilerPanel.vue
@@ -62,6 +62,7 @@ src/
     │   ├── OverlayControls.vue
     │   └── Timeline.vue
     └── ui/
+        ├── SettingsPopover.vue     # Перемикач теми Dark/Light + шрифт S/M/L (реалізовано між Step 7 і 8)
         ├── SplitLayout.vue
         └── ResizablePanel.vue
 ```
@@ -435,49 +436,66 @@ export function buildImageResolver(images: SpineFile[]) {
 
 ---
 
-## Step 6 — Skins Panel + Skin Composer
+## Step 6 — Skins Panel + Skin Composer ✅
 
-**Видимий результат:** dropdown зі скінами, вибір змінює вигляд; Skin Composer — чекбокси для composite skin.
+**Видимий результат:** секція Skins вбудована в AnimationPanel — список скінів з вибором, Skin Composer для комбінування.
 
-### Задачі
+> **Примітка:** окремий `SkinsPanel.vue` не створювався — функціональність об'єднана з `AnimationPanel.vue` для компактності UI.
 
-- [ ] `SkinsPanel.vue`:
-  - Список скінів з radio / dropdown
-  - Кнопка "Copy name"
-  - **Skin Composer** — мультивибір скінів, `adapter.setSkins(['body', 'weapon_sword'])`:
-    ```typescript
-    // в адаптері:
-    setSkins(names: string[]) {
-      const combined = new spine.Skin('combined');
-      for (const name of names) {
-        const skin = this.skeleton.data.findSkin(name);
-        if (skin) combined.addSkin(skin);
-      }
-      this.skeleton.setSkin(combined);
-      this.skeleton.setSlotsToSetupPose();
-    }
-    ```
-  - Попередження якщо два скіни мають attachments для одного слоту (конфлікт)
+### Реалізовано
+
+- [x] Секція **Skins** у `AnimationPanel.vue` (рядки 107–149):
+  - Список скінів з radio-кнопками (single mode) або чекбоксами (Composer mode)
+  - Кнопка **Composer** вмикає мультивибір; toggle автоматично переносить поточний скін у composerSkins
+  - Кнопка **⎘ Copy name** з'являється при hover на рядку скіну
+  - Клік по рядку → `emit('setSkins', [skin])` або toggle в composer
+- [x] `adapter.setSkins(names)` — реалізовано в BasePixi7Adapter і Spine42Adapter (compose через `Skin.addSkin`, потім `setSlotsToSetupPose`)
+- [x] `ViewerPage.vue` → `onSetSkins` → `stageRef.value?.setSkins(names)`
 
 ---
 
-## Step 7 — Skeleton Inspector
+## Step 7 — Skeleton Inspector ✅
 
-**Видимий результат:** дерево кісток і слотів з live-оновленням значень під час програвання.
+**Видимий результат:** вкладка "Inspector" поруч з Files і Animation — список кісток з live x/y/rotation і список активних attachments з колірними badge-ами типу.
 
-### Задачі
+### Реалізовано
 
-- [ ] `SkeletonInspector.vue` — дерево з `n-tree` (Naive UI):
-  - **Bones** — ієрархічне дерево: `localX`, `localY`, `rotation`, `scaleX`, `scaleY`
-  - **Slots** — плаский список: активний attachment, blend mode, видимість toggle
-  - **Constraints** — IK / Transform / Path / Physics з параметрами
-  - **Attachments** — при кліку на слот: RegionAttachment (розмір, регіон), MeshAttachment (vertices, triangles), ClippingAttachment (vertices) — позначається як 🔴 expensive
-- [ ] Tick-loop → кожні 100ms оновлює `useSkeletonStore.boneTransforms`
-- [ ] Клік по кістці → підсвічення на canvas overlay
+- [x] `src/core/stores/useInspectorStore.ts` — Pinia store з `shallowRef<BoneTransform[]>` і `shallowRef<AttachmentInfo[]>`, методи `update()` / `clear()`
+- [x] `src/components/panels/SkeletonPanel.vue` — два розділи:
+  - **Bones** — flat list з depth-indent (parent-before-child порядок, один прохід); searchable; live x, y, rotation
+  - **Attachments** — активні attachments: slotName + attachmentName + type badge (region/mesh/clipping/path, кольорові)
+- [x] `PreviewStage.vue` — throttle в тікері: кожні 6 кадрів (`~10fps`) оновлює `inspectorStore.update(getBoneTransforms(), getActiveAttachments())`; `clear()` при unload та unmount
+- [x] `ViewerPage.vue` — додана вкладка `Inspector`
 
 ---
 
-## Step 8 — Events Panel
+## Step 8 — Events Panel ✅
+
+**Видимий результат:** вкладка "Events" — live-лог подій з фільтром, таймлайном, статистикою та кнопкою копіювання назви.
+
+### Реалізовано
+
+- [x] `src/core/stores/useEventsStore.ts` — `log: ref<SpineEvent[]>` (max 500), `filter`, `paused`, `filteredLog` (фільтр + reversed), `eventStats` (sorted by count); `push()` / `clear()`
+- [x] `src/components/panels/EventsPanel.vue`:
+  - Контроли: filter input + Clear + ⏸/▶ Pause
+  - **Timeline** — CSS-positioned тіки (кольорові за хешем назви), плейхед, hover tooltip (name + time + values), click → emit `seek`
+  - **Log table** — newest first; колонки Tr / Time / Event / Int / Float / Str; кнопка `⎘` копіює назву в буфер
+  - **Statistics** — кольорова крапка, назва, `⎘`, ×count; sorted by count desc
+  - Hint якщо в скелеті немає визначених подій
+- [x] `PreviewStage.vue` — `spineAdapter.onEvent(e => eventsStore.push(e))` після load; `eventsStore.clear()` при заміні скелету та unmount; `seekTo(track, time)` додано в `defineExpose`
+- [x] `ViewerPage.vue` — вкладка Events, `onSeekTo` handler
+
+## Step 8.5 — UX-покращення тулбару і вкладок ✅
+
+### Реалізовано
+
+- [x] **Скорочені мітки вкладок**: "Animation" → "Anim", "Inspector" → "Insp" — всі 4 вкладки влазять без переповнення
+- [x] **▶ Play у тулбарі** — дублює логіку AnimationPanel; показує ⏸ / ▶ Resume / ▶ Play; мінімальна ширина 80px
+- [x] **Disabled без активних треків** — кнопки ▶ Play, ← 1f, 1f → (і в AnimationPanel, і в тулбарі) відключені при `animationStore.tracks.length === 0`
+
+---
+
+## Step 9 — Atlas Inspector
 
 **Видимий результат:** таблиця подій що оновлюється в реальному часі; таймлайн з мітками подій.
 
@@ -595,9 +613,24 @@ export function buildImageResolver(images: SpineFile[]) {
 
 ---
 
+## Step 7.5 — Theme & Font Size ✅ (між Step 7 і Step 8)
+
+**Видимий результат:** кнопка ⚙ у toolbar і на VersionPickerPage → попоувер Dark/Light + S/M/L.
+
+### Реалізовано
+
+- [x] `src/assets/themes.css` — CSS custom properties на `html`: `.theme-dark` / `.theme-light` (14 змінних `--c-*`) + `.font-sm` (16px) / `.font-md` (19px) / `.font-lg` (22px)
+- [x] `src/core/stores/useSettingsStore.ts` — `theme: 'dark'|'light'`, `fontSize: 'sm'|'md'|'lg'`; localStorage persist (`sv-theme`, `sv-fontsize`); дефолт: dark + sm
+- [x] `src/components/ui/SettingsPopover.vue` — `n-popover` trigger=click; кнопки Dark/Light + S/M/L
+- [x] `App.vue` — `watchEffect` додає `theme-X` і `font-X` класи на `document.documentElement`; `naiveTheme = computed(...)` → `darkTheme` або `null`; `<n-config-provider :theme="naiveTheme">`
+- [x] `main.ts` — `import './assets/themes.css'`
+- [x] Всі компоненти (`ViewerPage`, `VersionPickerPage`, `LoaderPanel`, `AnimationPanel`, `SkeletonPanel`, `PreviewStage`) — hardcoded кольори замінені на CSS змінні
+
+---
+
 ## Step 13 — Polish & UX
 
-**Видимий результат:** resizable panels, keyboard shortcuts, URL sharing, dark/light theme.
+**Видимий результат:** resizable panels, keyboard shortcuts, URL sharing.
 
 ### Задачі
 
@@ -609,8 +642,8 @@ export function buildImageResolver(images: SpineFile[]) {
   - `←` / `→` — shift animation ±1 frame
   - `R` — reset pose
   - `0–9` — вибір треку
-- [ ] `localStorage` — persist: version choice, last zoom/pos, panel sizes, bg color
-- [ ] Тема: dark (default) / light toggle
+- [ ] `localStorage` — persist: last zoom/pos, panel sizes, bg color
+- [x] Тема dark/light + вибір шрифту — реалізовано в Step 7.5
 
 ---
 

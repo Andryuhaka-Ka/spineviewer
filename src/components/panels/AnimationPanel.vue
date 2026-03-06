@@ -57,19 +57,19 @@
         <n-button
           size="small"
           :type="animationStore.isPlaying ? 'default' : 'primary'"
-          :disabled="!skeletonStore.isLoaded"
+          :disabled="!skeletonStore.isLoaded || animationStore.tracks.length === 0"
           style="min-width: 72px"
           @click="animationStore.isPlaying ? animationStore.pause() : animationStore.play()"
         >{{ animationStore.isPlaying ? '⏸ Pause' : (animationStore.isPaused ? '▶ Resume' : '▶ Play') }}</n-button>
 
         <n-button
           size="small"
-          :disabled="!skeletonStore.isLoaded"
+          :disabled="!skeletonStore.isLoaded || animationStore.tracks.length === 0"
           @click="seekAllDelta(-1 / 60)"
         >← 1f</n-button>
         <n-button
           size="small"
-          :disabled="!skeletonStore.isLoaded"
+          :disabled="!skeletonStore.isLoaded || animationStore.tracks.length === 0"
           @click="seekAllDelta(1 / 60)"
         >1f →</n-button>
       </div>
