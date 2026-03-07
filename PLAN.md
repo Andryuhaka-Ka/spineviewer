@@ -495,44 +495,23 @@ export function buildImageResolver(images: SpineFile[]) {
 
 ---
 
-## Step 9 — Atlas Inspector
+## Step 9 — Atlas Inspector ✅
 
-**Видимий результат:** таблиця подій що оновлюється в реальному часі; таймлайн з мітками подій.
+**Видимий результат:** вкладка "Atlas" — зображення атласу з SVG overlay регіонів; hover tooltip; список регіонів; статистика використання; zoom/pan.
 
-### Задачі
+### Реалізовано
 
-- [ ] `src/core/stores/useEventsStore.ts`:
-  ```typescript
-  const log = ref<SpineEvent[]>([]);          // max 500 записів
-  const filter = ref('');                      // фільтр по назві
-  const eventCounts = computed(...)           // { eventName: count }
-  ```
-- [ ] `EventsPanel.vue`:
-  - Таблиця: time / track / event name / intValue / floatValue / stringValue
-  - Filter input, Clear, Pause toggle
-  - **Event Timeline** — SVG або canvas смуга:
-    - Горизонтальна шкала 0..animationEnd
-    - Вертикальні лінії на позиціях подій
-    - Hover tooltip
-    - Клік → `adapter.seekTo(track, time)`
-  - **Статистика** — таблиця `{name, count, avgInterval}`
-- [ ] `ISpineAdapter.onEvent(cb)` — реалізується в кожному адаптері через listener spine runtime
-
----
-
-## Step 9 — Atlas Inspector
-
-**Видимий результат:** зображення атласу з накладеними прямокутниками регіонів; список регіонів; підсвічення невикористаних.
-
-### Задачі
-
-- [ ] `AtlasInspector.vue`:
-  - Canvas (або `<img>` + `<svg>` overlay) з зображенням атласу
-  - Прямокутники всіх регіонів, назви при hover
-  - **Unused regions** — регіони які не з'явились жодного разу за час перегляду (збираємо з `adapter.getActiveAttachments()`)
-  - Список регіонів: назва / x,y / w,h / rotate / padding
-  - Статистика: загальна площа / використана / % утилізації
-  - Zoom атласу (колесо миші)
+- [x] `src/core/utils/atlasTextParser.ts` — парсер Spine atlas text format (3.x: xy/size/orig/offset; 4.x: bounds/offsets); підтримка мультисторінкових атласів
+- [x] `src/core/stores/useAtlasStore.ts` — `pages: AtlasPage[]`, `imageUrls: Record<string, string>`, `seenRegions: Set<string>`; методи `load()`, `markSeen()`, `clear()`
+- [x] `src/components/panels/AtlasInspector.vue`:
+  - **Atlas viewer** — `<img>` + `<svg>` overlay (168px, overflow hidden); zoom (wheel) + pan (drag); `vector-effect: non-scaling-stroke` для чітких меж регіонів незалежно від масштабу
+  - **Region rects** — зелені якщо seen, сірі якщо unseen; виділення при click в списку (blue); `Fit` кнопка → `resetZoom()`; клік у списку → `panToRegion()` центрує регіон
+  - **Page tabs** — з'являються тільки при мультисторінковому атласі
+  - **Hover bar** — назва, координати, розмір, теги `rot`/`used`/`unseen` при наведенні на SVG rect
+  - **Stats row** — кількість регіонів, кількість seen, % утилізації (сума площ регіонів / площа атласу)
+  - **Region list** — фільтр, алфавітне сортування, кольорова крапка (зелена/сіра), назва, розмір
+- [x] `PreviewStage.vue` — `atlasStore.load(atlas, images)` після load скелету; `atlasStore.markSeen()` в throttle-тікері (~10fps) для region/mesh attachments; `atlasStore.clear()` при destroy та unmount
+- [x] `ViewerPage.vue` — вкладка "Atlas" (`AtlasInspector`)
 
 ---
 

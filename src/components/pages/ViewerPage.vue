@@ -46,6 +46,9 @@
           <n-tab-pane name="events" tab="Events" class="tab-pane">
             <EventsPanel @seek="onSeekTo" />
           </n-tab-pane>
+          <n-tab-pane name="atlas" tab="Atlas" class="tab-pane">
+            <AtlasInspector />
+          </n-tab-pane>
         </n-tabs>
       </aside>
 
@@ -62,6 +65,7 @@ import LoaderPanel from '@/components/panels/LoaderPanel.vue'
 import AnimationPanel from '@/components/panels/AnimationPanel.vue'
 import SkeletonPanel from '@/components/panels/SkeletonPanel.vue'
 import EventsPanel from '@/components/panels/EventsPanel.vue'
+import AtlasInspector from '@/components/panels/AtlasInspector.vue'
 import SettingsPopover from '@/components/ui/SettingsPopover.vue'
 import { useVersionStore } from '@/core/stores/useVersionStore'
 import { useSkeletonStore } from '@/core/stores/useSkeletonStore'
@@ -74,7 +78,7 @@ const versionStore    = useVersionStore()
 const skeletonStore   = useSkeletonStore()
 const animationStore  = useAnimationStore()
 const stageRef      = ref<InstanceType<typeof PreviewStage> | null>(null)
-const activeTab     = ref<'files' | 'animation' | 'inspector' | 'events'>('files')
+const activeTab     = ref<'files' | 'animation' | 'inspector' | 'events' | 'atlas'>('files')
 
 // Auto-switch to animation tab when a skeleton loads
 watch(() => skeletonStore.isLoaded, (loaded) => {
