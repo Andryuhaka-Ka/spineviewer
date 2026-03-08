@@ -10,6 +10,21 @@
     </div>
 
     <template v-else>
+      <!-- ── Source Files ─────────────────────────────────── -->
+      <div v-if="atlasFiles.length > 0" class="files-section">
+        <div
+          v-for="info in atlasFiles"
+          :key="info.name"
+          class="file-row"
+        >
+          <span class="file-type-badge" :class="`file-type-badge--${info.type}`">
+            {{ TYPE_LABELS[info.type] }}
+          </span>
+          <span class="file-name" :title="info.name">{{ info.name }}</span>
+          <span class="file-size">{{ formatSize(info.size) }}</span>
+        </div>
+      </div>
+
       <div class="mini-stats">
         <div class="stat-row">
           <span class="stat-label">Pages</span>
@@ -152,12 +167,32 @@
 </template>
 
 <script setup lang="ts">
-import { useAtlasStore } from '@/core/stores/useAtlasStore'
+import { useAtlasStore }   from '@/core/stores/useAtlasStore'
 import { useSkeletonStore } from '@/core/stores/useSkeletonStore'
+import { useLoaderStore }   from '@/core/stores/useLoaderStore'
 import type { AtlasRegion, AtlasPage } from '@/core/utils/atlasTextParser'
+import type { SpineFileType } from '@/core/types/FileSet'
 
 const atlasStore    = useAtlasStore()
 const skeletonStore = useSkeletonStore()
+const loaderStore   = useLoaderStore()
+
+const TYPE_LABELS: Record<SpineFileType, string> = {
+  'skeleton-json': 'JSON',
+  'skeleton-skel': 'SKEL',
+  atlas:           'ATLAS',
+  image:           'IMG',
+}
+
+const atlasFiles = computed(() =>
+  loaderStore.pendingFileInfos.filter(f => f.type === 'atlas' || f.type === 'image'),
+)
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
 
 // ── Modal state ───────────────────────────────────────────────────────────────
 const modalOpen   = ref(false)
@@ -594,6 +629,51 @@ onUnmounted(() => {
   padding: 10px 12px;
   height: 100%;
   font-size: 0.75rem;
+}
+
+/* ── Source files ── */
+.files-section {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--c-border-dim);
+}
+
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+}
+
+.file-type-badge {
+  flex-shrink: 0;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 1px 4px;
+  border-radius: 3px;
+  min-width: 34px;
+  text-align: center;
+}
+
+.file-type-badge--atlas { background: #3b2d5a; color: #c4b5fd; }
+.file-type-badge--image { background: #1e3d2e; color: #86efac; }
+
+.file-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--c-text-dim);
+}
+
+.file-size {
+  flex-shrink: 0;
+  color: var(--c-text-faint);
+  font-variant-numeric: tabular-nums;
 }
 
 .mini-stats {

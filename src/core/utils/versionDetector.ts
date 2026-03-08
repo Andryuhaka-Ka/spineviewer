@@ -22,6 +22,24 @@ export function detectSpineVersion(jsonText: string): string {
 }
 
 /**
+ * Scans the first 100 bytes of a binary .skel file for an embedded version
+ * string of the form "X.Y.Z" and returns the matching major.minor, or "unknown".
+ */
+export function detectSpineVersionFromSkel(buffer: ArrayBuffer): string {
+  try {
+    const bytes = new Uint8Array(buffer, 0, Math.min(buffer.byteLength, 100))
+    const text  = new TextDecoder('latin1').decode(bytes)
+    const match = text.match(/(\d+\.\d+)\.\d+/)
+    if (!match) return 'unknown'
+
+    const majorMinor = match[1]
+    return KNOWN_VERSIONS.includes(majorMinor as never) ? majorMinor : `${majorMinor} (unsupported)`
+  } catch {
+    return 'unknown'
+  }
+}
+
+/**
  * Returns true if the detected version is compatible with the user's selection.
  * Unknown version is always considered compatible (give it a chance to load).
  */

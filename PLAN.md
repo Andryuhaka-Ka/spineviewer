@@ -605,20 +605,31 @@ export function buildImageResolver(images: SpineFile[]) {
 
 ## Step 13 — Polish & UX
 
-**Видимий результат:** resizable panels, keyboard shortcuts, URL sharing.
+**Видимий результат:** file loading на version picker з auto-detect, resizable panel, keyboard shortcuts.
 
-### Задачі
+### Реалізовано
+
+- [x] **File loading перенесено на VersionPickerPage**:
+  - Drag-drop зона + Choose Files / Choose Folder кнопки між картками версій і Open Viewer
+  - Auto-класифікація файлів одразу при drop (не чекає натискання Load)
+  - Auto-detect Spine version з JSON → auto-select radio (3.8→Pixi7, 4.0→Pixi7, 4.1→Pixi7, 4.2→Pixi8)
+  - File list preview (badge + name + size)
+  - Open Viewer disabled поки файли не завантажено (`!store.isReady || !loaderStore.isLoaded`)
+- [x] **Вкладку Files прибрано** з ViewerPage (LoaderPanel більше не відображається)
+- [x] **Auto-load у PreviewStage** — після pixi init перевіряє `loaderStore.isLoaded` і одразу завантажує скелет
+- [x] **Back з підтвердженням та повним reset**: `window.confirm` → `skeletonStore.clear()` + `animationStore.reset()` + `loaderStore.clear()` + `exportStore.finish()`
+- [x] **Inspector tab** показує секцію "Loaded Files" зверху (badge + name + size, без drag-drop)
+- [x] Тема dark/light + вибір шрифту — реалізовано в Step 7.5
+
+### Залишилось
 
 - [ ] `SplitLayout.vue` — перетягування роздільника між canvas і панелями
-- [ ] `ResizablePanel.vue` — колапс окремих секцій
-- [ ] **URL sharing** — encode `{pixiVersion, spineVersion}` у URL query
 - [ ] **Keyboard shortcuts**:
   - `Space` — play/pause
   - `←` / `→` — shift animation ±1 frame
   - `R` — reset pose
   - `0–9` — вибір треку
-- [ ] `localStorage` — persist: last zoom/pos, panel sizes, bg color
-- [x] Тема dark/light + вибір шрифту — реалізовано в Step 7.5
+- [ ] `localStorage` — persist: panel width, zoom/pos
 
 ---
 

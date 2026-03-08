@@ -29,6 +29,7 @@ import { useEventsStore } from '@/core/stores/useEventsStore'
 import { useAtlasStore }      from '@/core/stores/useAtlasStore'
 import { useProfilerStore }   from '@/core/stores/useProfilerStore'
 import { useComplexityStore } from '@/core/stores/useComplexityStore'
+import { useLoaderStore }    from '@/core/stores/useLoaderStore'
 import type { IPixiApp, ITrackOverlay } from '@/core/types/IPixiApp'
 import type { ISpineAdapter, TrackState } from '@/core/types/ISpineAdapter'
 import type { FileSet } from '@/core/types/FileSet'
@@ -42,6 +43,7 @@ const eventsStore    = useEventsStore()
 const atlasStore      = useAtlasStore()
 const profilerStore   = useProfilerStore()
 const complexityStore = useComplexityStore()
+const loaderStore     = useLoaderStore()
 
 const containerRef = ref<HTMLDivElement | null>(null)
 const canvasRef    = ref<HTMLCanvasElement | null>(null)
@@ -185,6 +187,10 @@ onMounted(async () => {
         }
       },
     )
+    // Auto-load if files were pre-loaded from version picker
+    if (loaderStore.isLoaded && loaderStore.fileSet) {
+      await loadSpine(loaderStore.fileSet)
+    }
   } catch (e) {
     spineError.value = e instanceof Error ? e.message : 'Failed to initialize Pixi'
   } finally {

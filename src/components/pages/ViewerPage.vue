@@ -1,7 +1,7 @@
 <template>
   <div class="viewer">
     <header class="toolbar">
-      <button class="back-btn" @click="emit('back')">← Back</button>
+      <button class="back-btn" @click="onClickBack">← Back</button>
       <span class="version-tag">
         Pixi {{ versionStore.pixiVersion }} · Spine {{ versionStore.spineVersion }}
       </span>
@@ -25,9 +25,6 @@
           :tabs-padding="8"
           class="side-tabs"
         >
-          <n-tab-pane name="files" tab="Files" class="tab-pane">
-            <LoaderPanel @load="onFilesLoaded" />
-          </n-tab-pane>
           <n-tab-pane name="animation" tab="Anim" class="tab-pane">
             <AnimationPanel
               @set-animation="onSetAnimation"
@@ -76,7 +73,6 @@
 
 <script setup lang="ts">
 import PreviewStage from '@/components/stage/PreviewStage.vue'
-import LoaderPanel from '@/components/panels/LoaderPanel.vue'
 import AnimationPanel from '@/components/panels/AnimationPanel.vue'
 import SkeletonPanel from '@/components/panels/SkeletonPanel.vue'
 import EventsPanel from '@/components/panels/EventsPanel.vue'
@@ -88,26 +84,27 @@ import SettingsPopover from '@/components/ui/SettingsPopover.vue'
 import { useVersionStore } from '@/core/stores/useVersionStore'
 import { useSkeletonStore } from '@/core/stores/useSkeletonStore'
 import { useAnimationStore } from '@/core/stores/useAnimationStore'
+import { useLoaderStore } from '@/core/stores/useLoaderStore'
 import { useExportStore } from '@/core/stores/useExportStore'
 import { downloadBlob, downloadJson, canvasToBlob, buildSpriteSheet } from '@/core/utils/exportUtils'
-import type { FileSet } from '@/core/types/FileSet'
 
 const emit = defineEmits<{ back: [] }>()
 
 const versionStore    = useVersionStore()
 const skeletonStore   = useSkeletonStore()
 const animationStore  = useAnimationStore()
+const loaderStore     = useLoaderStore()
 const exportStore     = useExportStore()
 const stageRef      = ref<InstanceType<typeof PreviewStage> | null>(null)
-const activeTab     = ref<'files' | 'animation' | 'inspector' | 'events' | 'atlas' | 'perf' | 'compl' | 'export'>('files')
+const activeTab     = ref<'animation' | 'inspector' | 'events' | 'atlas' | 'perf' | 'compl' | 'export'>('animation')
 
-// Auto-switch to animation tab when a skeleton loads
-watch(() => skeletonStore.isLoaded, (loaded) => {
-  if (loaded) activeTab.value = 'animation'
-})
-
-async function onFilesLoaded(fileSet: FileSet) {
-  await stageRef.value?.loadSpine(fileSet)
+function onClickBack() {
+  if (!window.confirm('Reset viewer and return to version picker?')) return
+  skeletonStore.clear()
+  animationStore.reset()
+  loaderStore.clear()
+  exportStore.finish()
+  emit('back')
 }
 
 function onSetAnimation(track: number, name: string, loop: boolean) {
