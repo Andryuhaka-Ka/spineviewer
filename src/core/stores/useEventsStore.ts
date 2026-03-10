@@ -7,14 +7,25 @@
  */
 
 import { defineStore } from 'pinia'
-import type { SpineEvent } from '@/core/types/ISpineAdapter'
+import type { SpineEvent, AnimationEventMarker } from '@/core/types/ISpineAdapter'
 
 const MAX_LOG = 500
+
+export interface AnimationMarkerEntry extends AnimationEventMarker {
+  trackIndex: number
+  animationName: string
+}
 
 export const useEventsStore = defineStore('events', () => {
   const log    = ref<SpineEvent[]>([])
   const filter = ref('')
   const paused = ref(false)
+
+  // Static markers: which events fire in current animations (set by PreviewStage)
+  const animationMarkers = ref<AnimationMarkerEntry[]>([])
+
+  // Flash timestamps: event name → performance.now() when last fired
+  const lastFiredAt = ref<Map<string, number>>(new Map())
 
   // Filtered + newest-first for display
   const filteredLog = computed(() => {
@@ -38,11 +49,24 @@ export const useEventsStore = defineStore('events', () => {
     if (paused.value) return
     log.value.push(event)
     if (log.value.length > MAX_LOG) log.value.shift()
+    // Record flash timestamp
+    const next = new Map(lastFiredAt.value)
+    next.set(event.name, performance.now())
+    lastFiredAt.value = next
+  }
+
+  function setAnimationMarkers(markers: AnimationMarkerEntry[]): void {
+    animationMarkers.value = markers
   }
 
   function clear(): void {
     log.value = []
+    lastFiredAt.value = new Map()
   }
 
-  return { log, filter, paused, filteredLog, eventStats, push, clear }
+  return {
+    log, filter, paused, filteredLog, eventStats,
+    animationMarkers, lastFiredAt,
+    push, setAnimationMarkers, clear,
+  }
 })

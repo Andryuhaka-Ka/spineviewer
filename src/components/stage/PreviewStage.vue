@@ -19,8 +19,85 @@
   >
     <canvas ref="canvasRef" class="canvas" />
 
+    <!-- Origin crosshair -->
+    <div
+      v-if="viewerStore.showOrigin && spineLoaded"
+      class="origin-cross"
+      :style="{ left: originScreenX + 'px', top: originScreenY + 'px' }"
+    />
+
+    <!-- Selected bone crosshair -->
+    <div
+      v-if="selectedBonePos"
+      class="bone-cross"
+      :style="{ left: selectedBonePos.x + 'px', top: selectedBonePos.y + 'px' }"
+    />
+
+    <!-- Selected slot bounds -->
+    <div
+      v-if="selectedSlotRect"
+      class="slot-bounds"
+      :style="{
+        left:   selectedSlotRect.left   + 'px',
+        top:    selectedSlotRect.top    + 'px',
+        width:  selectedSlotRect.width  + 'px',
+        height: selectedSlotRect.height + 'px',
+      }"
+    />
+
+    <!-- Top-left overlay: origin toggle -->
+    <div class="overlay-top-left">
+      <div class="origin-toggle">
+        <input
+          id="origin-cb"
+          type="checkbox"
+          v-model="viewerStore.showOrigin"
+          title="Show origin (0,0)"
+        />
+        <span class="origin-label" title="Center scene" @click="onResetView">origin</span>
+      </div>
+    </div>
+
     <div class="overlay-top-right">
       <span class="fps" :class="fpsClass">{{ fps }} FPS</span>
+    </div>
+
+    <!-- Progress bars overlay -->
+    <div v-if="animationStore.tracks.length > 0" class="progress-overlay">
+      <div
+        v-for="track in animationStore.tracks"
+        :key="track.trackIndex"
+        class="progress-track"
+        @mousedown.stop.prevent="onProgressDragStart($event, track.trackIndex)"
+      >
+        <div class="progress-info">
+          <span class="progress-name">
+            <span class="progress-idx">#{{ track.trackIndex }}</span>
+            {{ track.animationName }}
+          </span>
+          <span class="progress-time">{{ formatTrackTime(track) }}</span>
+        </div>
+        <div
+          class="progress-bar-wrap"
+          @mousemove.stop="onBarMouseMove($event, track)"
+          @mouseleave.stop="hoveredMarker = null"
+        >
+          <div
+            class="progress-bar-fill"
+            :style="{ width: getTrackProgress(track) + '%' }"
+          />
+          <template v-for="marker in (eventMarkersMap.get(track.trackIndex) ?? [])" :key="marker.name + marker.time">
+            <div
+              class="progress-marker"
+              :style="{ left: track.duration > 0 ? (marker.time / track.duration * 100) + '%' : '0%' }"
+            />
+            <div
+              class="progress-marker-label"
+              :style="{ left: track.duration > 0 ? (marker.time / track.duration * 100) + '%' : '0%' }"
+            >{{ marker.name }} <span class="pml-time">{{ marker.time.toFixed(2) }}s</span></div>
+          </template>
+        </div>
+      </div>
     </div>
 
     <div v-if="spineError" class="error-banner">
@@ -40,6 +117,7 @@ import { createPixiApp, createSpineAdapter } from '@/core/AdapterFactory'
 import { useVersionStore } from '@/core/stores/useVersionStore'
 import { useViewerStore } from '@/core/stores/useViewerStore'
 import { useSkeletonStore } from '@/core/stores/useSkeletonStore'
+
 import { useAnimationStore } from '@/core/stores/useAnimationStore'
 import { useInspectorStore } from '@/core/stores/useInspectorStore'
 import { useEventsStore } from '@/core/stores/useEventsStore'
@@ -48,7 +126,7 @@ import { useProfilerStore }   from '@/core/stores/useProfilerStore'
 import { useComplexityStore } from '@/core/stores/useComplexityStore'
 import { useLoaderStore }    from '@/core/stores/useLoaderStore'
 import type { IPixiApp, ITrackOverlay } from '@/core/types/IPixiApp'
-import type { ISpineAdapter, TrackState } from '@/core/types/ISpineAdapter'
+import type { ISpineAdapter, TrackState, AnimationEventMarker } from '@/core/types/ISpineAdapter'
 import type { FileSet } from '@/core/types/FileSet'
 
 const versionStore   = useVersionStore()
@@ -82,15 +160,84 @@ let spineAdapter: ISpineAdapter | null = null
 // ── Viewport ──────────────────────────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let spineObj: any = null   // reference to the mounted spine PIXI.Container
-let baseX = 0              // canvas center X — updated on resize / load
-let baseY = 0              // canvas center Y
+const baseX = ref(0)       // canvas center X — updated on resize / load
+const baseY = ref(0)       // canvas center Y
+const spineLoaded = ref(false)
+
+const originScreenX = computed(() => baseX.value + viewerStore.posX)
+const originScreenY = computed(() => baseY.value + viewerStore.posY)
+
+// Selected bone screen position — bone worldX/Y are in Spine space (Y-up), convert to canvas (Y-down)
+const selectedBonePos = computed(() => {
+  const name = skeletonStore.selectedBone
+  if (!name || !spineLoaded.value) return null
+  const bt = inspectorStore.boneTransforms.find(b => b.name === name)
+  if (!bt) return null
+  return {
+    x: baseX.value + viewerStore.posX + bt.x * viewerStore.zoom,
+    y: baseY.value + viewerStore.posY - bt.y * viewerStore.zoom,
+  }
+})
+
+// ── Selected slot bounds overlay ──────────────────────────────────────────────
+const selectedSlotRect = ref<{ left: number; top: number; width: number; height: number } | null>(null)
+
+function updateSelectedSlotRect(): void {
+  const name = skeletonStore.selectedSlot
+  if (!name || !spineAdapter || !spineLoaded.value) { selectedSlotRect.value = null; return }
+  const bounds = spineAdapter.getSlotBounds(name)
+  if (!bounds) { selectedSlotRect.value = null; return }
+  const sx = baseX.value + viewerStore.posX
+  const sy = baseY.value + viewerStore.posY
+  const z  = viewerStore.zoom
+  selectedSlotRect.value = {
+    left:   sx + bounds.minX * z,
+    top:    sy - bounds.maxY * z,   // Y-flip: Spine Y-up → canvas Y-down
+    width:  Math.max(1, (bounds.maxX - bounds.minX) * z),
+    height: Math.max(1, (bounds.maxY - bounds.minY) * z),
+  }
+}
+
+// Re-compute rect on viewport change or slot deselect (ticker covers animation updates)
+watch(
+  [
+    () => skeletonStore.selectedSlot,
+    () => viewerStore.posX,
+    () => viewerStore.posY,
+    () => viewerStore.zoom,
+  ],
+  updateSelectedSlotRect,
+)
+
+// ── Event markers per track ────────────────────────────────────────────────────
+const eventMarkersMap = ref<Map<number, AnimationEventMarker[]>>(new Map())
+const hoveredMarker   = ref<{ name: string; time: number; trackIndex: number } | null>(null)
+
+function onBarMouseMove(e: MouseEvent, track: TrackState) {
+  if (track.duration <= 0) return
+  const wrap = e.currentTarget as HTMLElement
+  const rect = wrap.getBoundingClientRect()
+  const pct  = (e.clientX - rect.left) / rect.width
+  const hoverTime = pct * track.duration
+  const markers = eventMarkersMap.value.get(track.trackIndex) ?? []
+  const THRESH_PX = 8
+  let best: AnimationEventMarker | null = null
+  let bestDist = Infinity
+  for (const m of markers) {
+    const mPx = (m.time / track.duration) * rect.width
+    const dist = Math.abs(e.clientX - rect.left - mPx)
+    if (dist < bestDist && dist < THRESH_PX) { bestDist = dist; best = m }
+  }
+  void hoverTime
+  hoveredMarker.value = best ? { name: best.name, time: best.time, trackIndex: track.trackIndex } : null
+}
 const isPanning = ref(false)
 let panStart = { x: 0, y: 0, px: 0, py: 0 }
 
 function applyViewport() {
   if (!spineObj) return
-  spineObj.x = baseX + viewerStore.posX
-  spineObj.y = baseY + viewerStore.posY
+  spineObj.x = baseX.value + viewerStore.posX
+  spineObj.y = baseY.value + viewerStore.posY
   spineObj.scale.set(viewerStore.zoom)
 }
 
@@ -111,10 +258,10 @@ function onWheel(e: WheelEvent) {
   if (newZoom === viewerStore.zoom) return
 
   // Zoom towards cursor: keep point under cursor fixed in spine-space
-  const spineX = (mx - baseX - viewerStore.posX) / viewerStore.zoom
-  const spineY = (my - baseY - viewerStore.posY) / viewerStore.zoom
-  viewerStore.posX = mx - baseX - spineX * newZoom
-  viewerStore.posY = my - baseY - spineY * newZoom
+  const spineX = (mx - baseX.value - viewerStore.posX) / viewerStore.zoom
+  const spineY = (my - baseY.value - viewerStore.posY) / viewerStore.zoom
+  viewerStore.posX = mx - baseX.value - spineX * newZoom
+  viewerStore.posY = my - baseY.value - spineY * newZoom
   viewerStore.zoom = newZoom
   applyViewport()
 }
@@ -173,7 +320,7 @@ onMounted(async () => {
       if (spineAdapter) {
         const states = spineAdapter.getTrackStates()
         animationStore.setTracks(states)
-        trackOverlay?.updateText(states.length > 0 ? buildOverlayText(states, animationStore.trackEnabled) : '')
+        trackOverlay?.updateText('')
 
         // Keep disabled looped tracks frozen even after queue advances (new entry resets timeScale=1)
         for (const state of states) {
@@ -191,6 +338,11 @@ onMounted(async () => {
             animationStore.stop()
           }
         }
+
+        // Bone crosshair + slot bounds — every frame for smooth animation tracking.
+        // Guards ensure no-op when nothing is selected.
+        if (skeletonStore.selectedBone) inspectorStore.updateBones(spineAdapter.getBoneTransforms())
+        if (skeletonStore.selectedSlot) updateSelectedSlotRect()
 
         // Inspector + Atlas + Profiler: time-based throttle ~10 fps (100 ms).
         // Time-based avoids aliasing with short animation loops whose length
@@ -214,6 +366,24 @@ onMounted(async () => {
       () => viewerStore.bgColor,
       (color) => pixiApp?.setBackground(color),
       { immediate: true },
+    )
+
+    // Update event markers when track animation changes
+    watch(
+      () => animationStore.tracks.map(t => `${t.trackIndex}:${t.animationName}`),
+      () => {
+        if (!spineAdapter) return
+        const next = new Map<number, AnimationEventMarker[]>()
+        const flat: typeof eventsStore.animationMarkers[0][] = []
+        for (const track of animationStore.tracks) {
+          const markers = spineAdapter.getAnimationEvents(track.animationName)
+          next.set(track.trackIndex, markers)
+          for (const m of markers) flat.push({ ...m, trackIndex: track.trackIndex, animationName: track.animationName })
+        }
+        eventMarkersMap.value = next
+        eventsStore.setAnimationMarkers(flat)
+      },
+      { deep: false },
     )
 
     watch(
@@ -304,29 +474,44 @@ useResizeObserver(containerRef, ([entry]) => {
   if (width > 0 && height > 0) {
     pixiApp?.resize(width, height)
     trackOverlay?.resize(width, height)
-    baseX = width / 2
-    baseY = height * 0.75
+    baseX.value = width / 2
+    baseY.value = height * 0.5
     applyViewport()
   }
 })
 
-// ── Track overlay helpers ─────────────────────────────────────────────────────
+// ── Progress bar helpers ──────────────────────────────────────────────────────
 
-function buildBar(pct: number, len = 10): string {
-  const filled = Math.round(Math.max(0, Math.min(1, pct)) * len)
-  return '█'.repeat(filled) + '░'.repeat(len - filled)
+function getTrackProgress(track: TrackState): number {
+  if (track.duration <= 0) return 0
+  const t = track.loop ? track.time % track.duration : Math.min(track.time, track.duration)
+  return Math.min(100, (t / track.duration) * 100)
 }
 
-function buildOverlayText(states: TrackState[], enabledMap: Record<number, boolean>): string {
-  return states.map(t => {
-    const enabled = enabledMap[t.trackIndex] !== false
-    const time = t.loop ? t.time % t.duration : Math.min(t.time, t.duration)
-    const pct = t.duration > 0 ? time / t.duration : 0
-    const bar = buildBar(pct)
-    const tags = [t.loop ? 'loop' : '', !enabled ? 'paused' : ''].filter(Boolean).join(' ')
-    const name = t.animationName.length > 22 ? t.animationName.slice(0, 21) + '…' : t.animationName.padEnd(22)
-    return `#${t.trackIndex}  ${name}  ${time.toFixed(2)}s/${t.duration.toFixed(2)}s  [${bar}]${tags ? '  ' + tags : ''}`
-  }).join('\n')
+function formatTrackTime(track: TrackState): string {
+  const t = track.loop ? track.time % track.duration : Math.min(track.time, track.duration)
+  return `${t.toFixed(2)}s / ${track.duration.toFixed(2)}s`
+}
+
+function onProgressDragStart(e: MouseEvent, trackIndex: number) {
+  const wrap = (e.currentTarget as HTMLElement).querySelector('.progress-bar-wrap') as HTMLElement
+  if (!wrap) return
+
+  function seek(ev: MouseEvent) {
+    const rect = wrap.getBoundingClientRect()
+    const pct  = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width))
+    const track = animationStore.tracks.find(t => t.trackIndex === trackIndex)
+    if (track && track.duration > 0) spineAdapter?.seekTo(trackIndex, pct * track.duration)
+  }
+
+  seek(e)
+  const onMove = (ev: MouseEvent) => seek(ev)
+  const onUp   = () => {
+    window.removeEventListener('mousemove', onMove)
+    window.removeEventListener('mouseup', onUp)
+  }
+  window.addEventListener('mousemove', onMove)
+  window.addEventListener('mouseup', onUp)
 }
 
 // ── Public API ───────────────────────────────────────────────────────────────
@@ -368,8 +553,9 @@ async function loadSpine(fileSet: FileSet): Promise<void> {
     // Grab the mounted spine object and initialise viewport
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     spineObj = (pixiApp.stage as any).children?.at(-1) ?? null
-    baseX = width / 2
-    baseY = height * 0.75
+    baseX.value = width / 2
+    baseY.value = height * 0.5
+    spineLoaded.value = true
     viewerStore.resetView()
     applyViewport()
 
@@ -535,11 +721,113 @@ defineExpose({
   height: 100%;
 }
 
+.overlay-top-left {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  pointer-events: all;
+}
+
+.origin-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.68rem;
+  font-weight: 500;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: rgba(0,0,0,0.4);
+  backdrop-filter: blur(4px);
+}
+
+.origin-toggle input {
+  width: 11px;
+  height: 11px;
+  cursor: pointer;
+  accent-color: #7c6af5;
+  flex-shrink: 0;
+}
+
+.origin-label {
+  color: rgba(255,255,255,0.45);
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.15s;
+}
+
+.origin-label:hover { color: rgba(255,255,255,0.85); }
+
 .overlay-top-right {
   position: absolute;
   top: 10px;
   right: 12px;
   pointer-events: none;
+}
+
+/* ── Origin crosshair ── */
+.origin-cross {
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.origin-cross::before,
+.origin-cross::after {
+  content: '';
+  position: absolute;
+  background: rgba(255, 80, 80, 0.9);
+  border-radius: 1px;
+}
+
+/* horizontal bar */
+.origin-cross::before {
+  width: 14px;
+  height: 1.5px;
+  top: -0.75px;
+  left: -7px;
+}
+
+/* vertical bar */
+.origin-cross::after {
+  width: 1.5px;
+  height: 14px;
+  left: -0.75px;
+  top: -7px;
+}
+
+/* ── Selected bone crosshair ── */
+.bone-cross {
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.bone-cross::before,
+.bone-cross::after {
+  content: '';
+  position: absolute;
+  background: rgba(74, 222, 128, 0.9);
+  border-radius: 1px;
+}
+
+/* horizontal bar */
+.bone-cross::before {
+  width: 10px;
+  height: 1.5px;
+  top: -0.75px;
+  left: -5px;
+}
+
+/* vertical bar */
+.bone-cross::after {
+  width: 1.5px;
+  height: 10px;
+  left: -0.75px;
+  top: -5px;
 }
 
 .fps {
@@ -585,5 +873,119 @@ defineExpose({
 .loading-text {
   font-size: 0.8rem;
   color: var(--c-text-muted);
+}
+
+/* ── Selected slot bounds ── */
+.slot-bounds {
+  position: absolute;
+  pointer-events: none;
+  border: 1.5px solid rgba(96, 165, 250, 0.85);
+  border-radius: 1px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+  background: rgba(96, 165, 250, 0.06);
+}
+
+/* ── Progress overlay ── */
+.progress-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 12px;
+  right: 12px;
+  padding-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  z-index: 20;
+  pointer-events: all;
+}
+
+.progress-track {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  cursor: pointer;
+}
+
+.progress-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0 2px;
+}
+
+.progress-name {
+  font-size: 0.68rem;
+  color: rgba(255,255,255,0.55);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 60%;
+}
+
+.progress-idx {
+  color: rgba(255,255,255,0.3);
+  margin-right: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.progress-time {
+  font-size: 0.65rem;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255,255,255,0.35);
+  flex-shrink: 0;
+}
+
+.progress-bar-wrap {
+  position: relative;
+  height: 4px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px;
+  overflow: visible;
+  transition: height 0.15s;
+}
+
+.progress-track:hover .progress-bar-wrap {
+  height: 6px;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: rgba(124,106,245,0.85);
+  border-radius: 2px;
+  transition: width 0.05s linear;
+}
+
+.progress-marker {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 1.5px;
+  background: rgba(250,204,21,0.85);
+  transform: translateX(-50%);
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+.progress-marker-label {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 3px;
+  pointer-events: none;
+  white-space: nowrap;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: rgba(250,204,21,0.95);
+  line-height: 1;
+}
+
+.pml-time {
+  font-size: 0.6rem;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255,255,255,0.45);
 }
 </style>

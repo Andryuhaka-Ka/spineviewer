@@ -4,12 +4,21 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="76266a3f-c6bb-4d4e-a45c-2b17cdf27e49" name="Changes" comment="added project`s version">
+    <list default="true" id="76266a3f-c6bb-4d4e-a45c-2b17cdf27e49" name="Changes" comment="updated ui v1">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/PLAN.md" beforeDir="false" afterPath="$PROJECT_DIR$/PLAN.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/assets/themes.css" beforeDir="false" afterPath="$PROJECT_DIR$/src/assets/themes.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/components/pages/VersionPickerPage.vue" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/pages/VersionPickerPage.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/components/panels/AtlasInspector.vue" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/panels/AtlasInspector.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/adapters/pixi7/BasePixi7Adapter.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/adapters/pixi7/BasePixi7Adapter.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/adapters/pixi8/spine41/Spine41Adapter.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/adapters/pixi8/spine41/Spine41Adapter.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/adapters/pixi8/spine42/Spine42Adapter.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/adapters/pixi8/spine42/Spine42Adapter.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/pages/ViewerPage.vue" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/pages/ViewerPage.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/panels/AnimationPanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/panels/AnimationPanel.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/panels/SkeletonPanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/panels/SkeletonPanel.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/stage/PreviewStage.vue" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/stage/PreviewStage.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/core/stores/useEventsStore.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/stores/useEventsStore.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/core/stores/useInspectorStore.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/stores/useInspectorStore.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/core/stores/useSkeletonStore.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/stores/useSkeletonStore.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/core/stores/useViewerStore.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/stores/useViewerStore.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/core/types/ISpineAdapter.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/types/ISpineAdapter.ts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -119,7 +128,7 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772542772095</updated>
-      <workItem from="1772542773282" duration="90550000" />
+      <workItem from="1772542773282" duration="104023000" />
     </task>
     <task id="LOCAL-00001" summary="перший коміт">
       <option name="closed" value="true" />
@@ -273,7 +282,15 @@
       <option name="project" value="LOCAL" />
       <updated>1773008854792</updated>
     </task>
-    <option name="localTasksCounter" value="20" />
+    <task id="LOCAL-00020" summary="updated ui v1">
+      <option name="closed" value="true" />
+      <created>1773141057187</created>
+      <option name="number" value="00020" />
+      <option name="presentableId" value="LOCAL-00020" />
+      <option name="project" value="LOCAL" />
+      <updated>1773141057187</updated>
+    </task>
+    <option name="localTasksCounter" value="21" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -306,6 +323,7 @@
     <MESSAGE value="step 13" />
     <MESSAGE value="added copyright" />
     <MESSAGE value="added project`s version" />
-    <option name="LAST_COMMIT_MESSAGE" value="added project`s version" />
+    <MESSAGE value="updated ui v1" />
+    <option name="LAST_COMMIT_MESSAGE" value="updated ui v1" />
   </component>
 </project>

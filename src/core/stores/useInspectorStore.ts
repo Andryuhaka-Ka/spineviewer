@@ -18,10 +18,14 @@ export const useInspectorStore = defineStore('inspector', () => {
     activeAttachments.value = attachments
   }
 
+  function updateBones(bones: BoneTransform[]) {
+    boneTransforms.value = bones
+  }
+
   function clear() {
     boneTransforms.value    = []
     activeAttachments.value = []
   }
 
-  return { boneTransforms, activeAttachments, update, clear }
+  return { boneTransforms, activeAttachments, update, updateBones, clear }
 })

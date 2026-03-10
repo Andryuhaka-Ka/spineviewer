@@ -222,6 +222,42 @@
       </div>
     </section>
 
+    <n-divider style="margin: 6px 0" />
+
+    <!-- ── Events ────────────────────────────────────────── -->
+    <section class="section">
+      <div class="events-title-row">
+        <label class="label">Events</label>
+        <span class="ecol-tr ecol-hdr">Tr</span>
+        <span class="ecol-time ecol-hdr">Time</span>
+      </div>
+
+      <div v-if="!skeletonStore.isLoaded || eventsStore.animationMarkers.length === 0" class="empty-hint">
+        {{ !skeletonStore.isLoaded ? 'No skeleton loaded' : 'No events in current animations' }}
+      </div>
+
+      <div v-else class="events-table">
+        <div
+          v-for="(m, i) in eventsStore.animationMarkers"
+          :key="i"
+          class="events-row"
+          :class="{ 'events-row--flash': isFlashing(m.name) }"
+        >
+          <span class="ecol-name evt-name-wrap">
+            <button class="copy-btn" title="Copy name" @click.stop="copyEventName(m.name)">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2"/>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+            </button>
+            <span class="evt-name" :style="{ color: nameColor(m.name) }" :title="m.name">{{ m.name }}</span>
+          </span>
+          <span class="ecol-tr">#{{ m.trackIndex }}</span>
+          <span class="ecol-time">{{ m.time.toFixed(3) }}s</span>
+        </div>
+      </div>
+    </section>
+
   </div>
 </template>
 
@@ -229,6 +265,7 @@
 import type { CascaderOption } from 'naive-ui'
 import { useSkeletonStore } from '@/core/stores/useSkeletonStore'
 import { useAnimationStore } from '@/core/stores/useAnimationStore'
+import { useEventsStore } from '@/core/stores/useEventsStore'
 import { buildCascaderOptions } from '@/core/utils/buildCascaderOptions'
 
 const emit = defineEmits<{
@@ -244,8 +281,45 @@ const emit = defineEmits<{
 
 const skeletonStore  = useSkeletonStore()
 const animationStore = useAnimationStore()
+const eventsStore    = useEventsStore()
 
 const isAddMode = ref(false)
+
+// ── Event flash helpers ─────────────────────────────────────────────────────
+const FLASH_MS = 200
+const PALETTE = ['#7c6af5', '#4ade80', '#60a5fa', '#f87171', '#facc15', '#fb923c', '#a78bfa', '#34d399']
+
+function nameColor(name: string): string {
+  let hash = 0
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) & 0xffffffff
+  return PALETTE[Math.abs(hash) % PALETTE.length]
+}
+
+// Reactive tick for flash expiry — updates every ~50ms while there are active flashes
+const _tick = ref(0)
+let _flashTimer: ReturnType<typeof setInterval> | null = null
+
+watch(() => eventsStore.lastFiredAt, () => {
+  if (_flashTimer) return
+  _flashTimer = setInterval(() => {
+    _tick.value++
+    const now = performance.now()
+    const anyActive = [...eventsStore.lastFiredAt.values()].some(t => now - t < FLASH_MS + 50)
+    if (!anyActive) { clearInterval(_flashTimer!); _flashTimer = null }
+  }, 50)
+}, { deep: true })
+
+onUnmounted(() => { if (_flashTimer) clearInterval(_flashTimer) })
+
+function copyEventName(name: string) {
+  navigator.clipboard.writeText(name).catch(() => {})
+}
+
+function isFlashing(name: string): boolean {
+  void _tick.value // reactive dependency
+  const t = eventsStore.lastFiredAt.get(name)
+  return t !== undefined && performance.now() - t < FLASH_MS
+}
 
 // ── Skins state ────────────────────────────────────────────────────────────
 const composerMode  = ref(false)
@@ -481,11 +555,7 @@ function onCascaderSelect(value: string | number | Array<string | number> | null
 
 .copy-btn {
   flex-shrink: 0;
-  opacity: 0;
-  transition: opacity 0.1s;
 }
-
-.skin-row:hover .copy-btn { opacity: 1; }
 
 /* ── Active tracks ───────────────────────── */
 .active-tracks-header {
@@ -579,4 +649,102 @@ function onCascaderSelect(value: string | number | Array<string | number> | null
 
 .track-entry--current .entry-name { color: var(--c-text-dim); }
 .track-entry--queued  .entry-name { color: var(--c-text-faint); }
+
+/* ── Events table ────────────────────────────────── */
+.events-title-row {
+  display: grid;
+  grid-template-columns: 1fr 28px 50px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px;
+}
+
+.ecol-hdr {
+  font-size: 0.62rem;
+  color: var(--c-text-ghost);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.events-table {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.events-row {
+  display: grid;
+  grid-template-columns: 1fr 28px 50px;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+  font-size: 0.7rem;
+  border-radius: 4px;
+}
+
+.events-row {
+  transition: background 0.2s ease-out;
+}
+
+.events-row--flash {
+  background: rgba(124,106,245,0.18);
+  transition: background 0s;
+}
+
+.ecol-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.evt-name-wrap {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+.evt-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  min-width: 0;
+  flex: 1;
+}
+
+.copy-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--c-text-ghost);
+  cursor: pointer;
+  padding: 1px 3px;
+  border-radius: 3px;
+  transition: color 0.1s;
+}
+
+.copy-btn:hover { color: var(--c-text-muted); background: var(--c-raised); }
+
+.ecol-tr {
+  text-align: center;
+  color: var(--c-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.ecol-time {
+  text-align: right;
+  color: var(--c-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.empty-hint {
+  font-size: 0.72rem;
+  color: var(--c-text-ghost);
+  padding: 4px 0;
+}
 </style>

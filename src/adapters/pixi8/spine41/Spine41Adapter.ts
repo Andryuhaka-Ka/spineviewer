@@ -8,7 +8,7 @@
 
 import type {
   ISpineAdapter, BoneInfo, SlotInfo, EventInfo,
-  TrackState, BoneTransform, AttachmentInfo, SpineEvent,
+  TrackState, BoneTransform, AttachmentInfo, SpineEvent, AnimationEventMarker, SlotBounds,
 } from '@/core/types/ISpineAdapter'
 import type { FileSet } from '@/core/types/FileSet'
 
@@ -42,4 +42,6 @@ export default class StubAdapter implements ISpineAdapter {
   getBoneTransforms(): BoneTransform[] { return [] }
   getActiveAttachments(): AttachmentInfo[] { return [] }
   onEvent(_cb: (e: SpineEvent) => void): () => void { return () => {} }
+  getAnimationEvents(_animationName: string): AnimationEventMarker[] { return [] }
+  getSlotBounds(_slotName: string): SlotBounds | null { return null }
 }

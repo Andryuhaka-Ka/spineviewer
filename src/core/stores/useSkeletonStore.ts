@@ -10,13 +10,24 @@ import { defineStore } from 'pinia'
 import type { BoneInfo, SlotInfo, EventInfo } from '@/core/types/ISpineAdapter'
 
 export const useSkeletonStore = defineStore('skeleton', () => {
-  const animations = ref<string[]>([])
-  const skins      = ref<string[]>([])
-  const bones      = ref<BoneInfo[]>([])
-  const slots      = ref<SlotInfo[]>([])
-  const events     = ref<EventInfo[]>([])
+  const animations   = ref<string[]>([])
+  const skins        = ref<string[]>([])
+  const bones        = ref<BoneInfo[]>([])
+  const slots        = ref<SlotInfo[]>([])
+  const events       = ref<EventInfo[]>([])
+  const selectedBone    = ref<string | null>(null)
+  const selectedSlot    = ref<string | null>(null)
+  const syncSelection   = ref(false)
 
   const isLoaded = computed(() => animations.value.length > 0)
+
+  function selectBone(name: string | null): void {
+    selectedBone.value = selectedBone.value === name ? null : name
+  }
+
+  function selectSlot(name: string | null): void {
+    selectedSlot.value = selectedSlot.value === name ? null : name
+  }
 
   function populate(data: {
     animations: string[]
@@ -33,12 +44,14 @@ export const useSkeletonStore = defineStore('skeleton', () => {
   }
 
   function clear() {
-    animations.value = []
-    skins.value      = []
-    bones.value      = []
-    slots.value      = []
-    events.value     = []
+    animations.value   = []
+    skins.value        = []
+    bones.value        = []
+    slots.value        = []
+    events.value       = []
+    selectedBone.value = null
+    selectedSlot.value = null
   }
 
-  return { animations, skins, bones, slots, events, isLoaded, populate, clear }
+  return { animations, skins, bones, slots, events, isLoaded, selectedBone, selectBone, selectedSlot, selectSlot, syncSelection, populate, clear }
 })

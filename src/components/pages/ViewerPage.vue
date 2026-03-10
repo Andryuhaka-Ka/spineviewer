@@ -48,9 +48,6 @@
           <n-tab-pane name="inspector" tab="Insp" class="tab-pane">
             <SkeletonPanel />
           </n-tab-pane>
-          <n-tab-pane name="events" tab="Events" class="tab-pane">
-            <EventsPanel @seek="onSeekTo" />
-          </n-tab-pane>
           <n-tab-pane name="atlas" tab="Atlas" class="tab-pane">
             <AtlasInspector />
           </n-tab-pane>
@@ -88,7 +85,6 @@
 import PreviewStage from '@/components/stage/PreviewStage.vue'
 import AnimationPanel from '@/components/panels/AnimationPanel.vue'
 import SkeletonPanel from '@/components/panels/SkeletonPanel.vue'
-import EventsPanel from '@/components/panels/EventsPanel.vue'
 import AtlasInspector from '@/components/panels/AtlasInspector.vue'
 import ProfilerPanel    from '@/components/panels/ProfilerPanel.vue'
 import ComplexityPanel from '@/components/panels/ComplexityPanel.vue'
@@ -109,7 +105,7 @@ const animationStore  = useAnimationStore()
 const loaderStore     = useLoaderStore()
 const exportStore     = useExportStore()
 const stageRef      = ref<InstanceType<typeof PreviewStage> | null>(null)
-const activeTab     = ref<'animation' | 'inspector' | 'events' | 'atlas' | 'perf' | 'compl' | 'export'>('animation')
+const activeTab     = ref<'animation' | 'inspector' | 'atlas' | 'perf' | 'compl' | 'export'>('animation')
 
 // ── Resizable side panel ──────────────────────────────────────────────────────
 const PANEL_MIN = 180

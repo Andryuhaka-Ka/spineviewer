@@ -30,25 +30,39 @@
         <div class="section-header">
           <label class="label">
             Bones
-            <span class="count">({{ filteredBones.length }})</span>
+            <span class="count">({{ skeletonStore.bones.length }})</span>
             <span class="tick">· {{ updateTick }}</span>
           </label>
-          <n-input
-            v-model:value="boneSearch"
-            size="tiny"
-            placeholder="Filter…"
-            clearable
-            class="search-input"
-          />
+          <div class="header-actions">
+            <button class="tree-action-btn" title="Expand all" @click="expandAll">⊞</button>
+            <button class="tree-action-btn" title="Collapse all" @click="collapseAll">⊟</button>
+            <n-input
+              v-model:value="boneSearch"
+              size="tiny"
+              placeholder="Filter…"
+              clearable
+              class="search-input"
+            />
+          </div>
         </div>
 
-        <div class="bone-list">
+        <div ref="boneListRef" class="bone-list">
           <div
-            v-for="item in filteredBones"
+            v-for="item in visibleBones"
             :key="item.name"
             class="bone-row"
-            :style="{ paddingLeft: `${8 + item.depth * 10}px` }"
+            :class="{ 'bone-row--selected': skeletonStore.selectedBone === item.name }"
+            :style="{ paddingLeft: `${6 + item.depth * 12}px` }"
+            @click="onSelectBone(item.name)"
           >
+            <span
+              class="bone-toggle"
+              :class="item.hasChildren ? 'bone-toggle--active' : 'bone-toggle--leaf'"
+              @click.stop="item.hasChildren && toggleCollapse(item.name)"
+            >
+              <template v-if="item.hasChildren">{{ item.collapsed ? '▸' : '▾' }}</template>
+              <template v-else>·</template>
+            </span>
             <span class="bone-name">{{ item.name }}</span>
             <span v-if="item.transform" class="bone-vals">
               {{ fmt(item.transform.x) }}, {{ fmt(item.transform.y) }}, {{ fmt(item.transform.rotation) }}°
@@ -62,19 +76,27 @@
 
       <!-- ── Active Attachments ──────────────────────────── -->
       <section class="section">
-        <label class="label">
-          Attachments
-          <span class="count">({{ inspectorStore.activeAttachments.length }})</span>
-        </label>
+        <div class="attach-header">
+          <label class="label">
+            Attachments
+            <span class="count">({{ inspectorStore.activeAttachments.length }})</span>
+          </label>
+          <label class="sync-label" title="Sync bone ↔ attachment selection">
+            <input type="checkbox" v-model="skeletonStore.syncSelection" class="sync-cb" />
+            sync
+          </label>
+        </div>
 
         <div v-if="inspectorStore.activeAttachments.length === 0" class="empty-hint small">
           None active
         </div>
-        <div v-else class="attach-list">
+        <div v-else ref="attachListRef" class="attach-list">
           <div
             v-for="att in inspectorStore.activeAttachments"
             :key="att.slotName"
             class="attach-row"
+            :class="{ 'attach-row--selected': skeletonStore.selectedSlot === att.slotName }"
+            @click="onSelectSlot(att.slotName)"
           >
             <span class="attach-slot">{{ att.slotName }}</span>
             <span class="attach-name" :title="att.attachmentName">{{ att.attachmentName }}</span>
@@ -117,11 +139,10 @@ function formatSize(bytes: number): string {
 const boneSearch = ref('')
 
 // Tick counter — increments every inspector update so the user can see data IS live
-// even when bone positions don't change (e.g. attachment-only animations)
 const updateTick = ref(0)
 watch(() => inspectorStore.boneTransforms, () => { updateTick.value = (updateTick.value + 1) % 100 })
 
-// Compute depth for each bone (Spine guarantees parent-before-child order)
+// Depth map: bone name → nesting level
 const boneDepthMap = computed(() => {
   const map = new Map<string, number>()
   for (const bone of skeletonStore.bones) {
@@ -131,21 +152,148 @@ const boneDepthMap = computed(() => {
   return map
 })
 
-const filteredBones = computed(() => {
+// Children set: bones that have at least one child
+const bonesWithChildren = computed(() => {
+  const set = new Set<string>()
+  for (const bone of skeletonStore.bones) {
+    if (bone.parent !== null) set.add(bone.parent)
+  }
+  return set
+})
+
+// Collapsed state — starts with all parent nodes collapsed
+const collapsedBones = ref(new Set<string>())
+
+watch(
+  () => skeletonStore.bones,
+  (bones) => {
+    // Collapse all nodes that have children when skeleton loads / changes
+    const parents = new Set<string>()
+    for (const bone of bones) {
+      if (bone.parent !== null) parents.add(bone.parent)
+    }
+    collapsedBones.value = parents
+  },
+  { immediate: true },
+)
+
+function toggleCollapse(boneName: string): void {
+  const next = new Set(collapsedBones.value)
+  if (next.has(boneName)) next.delete(boneName)
+  else next.add(boneName)
+  collapsedBones.value = next
+}
+
+function expandAll(): void {
+  collapsedBones.value = new Set()
+}
+
+function collapseAll(): void {
+  collapsedBones.value = new Set(bonesWithChildren.value)
+}
+
+// Visible bones — respects search (ignore collapse) OR tree collapse state
+const visibleBones = computed(() => {
   const search = boneSearch.value.toLowerCase()
-  // Build transform lookup inline — directly tracks inspectorStore.boneTransforms
+
   const transformMap = new Map<string, BoneTransform>()
   for (const bt of inspectorStore.boneTransforms) {
     transformMap.set(bt.name, bt)
   }
-  return skeletonStore.bones
-    .filter(b => !search || b.name.toLowerCase().includes(search))
-    .map(b => ({
-      name: b.name,
-      depth: boneDepthMap.value.get(b.name) ?? 0,
-      transform: transformMap.get(b.name) ?? null,
-    }))
+
+  if (search) {
+    // Search mode — show all matching bones regardless of collapse state
+    return skeletonStore.bones
+      .filter(b => b.name.toLowerCase().includes(search))
+      .map(b => ({
+        name: b.name,
+        depth: boneDepthMap.value.get(b.name) ?? 0,
+        transform: transformMap.get(b.name) ?? null,
+        hasChildren: bonesWithChildren.value.has(b.name),
+        collapsed: false,
+      }))
+  }
+
+  // Tree mode — hide children of collapsed nodes.
+  // Spine guarantees parent-before-child order, so a single pass is sufficient.
+  const hiddenByAncestor = new Set<string>()
+  const result: Array<{
+    name: string; depth: number; transform: BoneTransform | null;
+    hasChildren: boolean; collapsed: boolean
+  }> = []
+
+  for (const bone of skeletonStore.bones) {
+    // A bone is hidden if any ancestor is collapsed
+    const isHidden =
+      bone.parent !== null &&
+      (hiddenByAncestor.has(bone.parent) || collapsedBones.value.has(bone.parent))
+
+    if (isHidden) {
+      hiddenByAncestor.add(bone.name)
+      continue
+    }
+
+    result.push({
+      name: bone.name,
+      depth: boneDepthMap.value.get(bone.name) ?? 0,
+      transform: transformMap.get(bone.name) ?? null,
+      hasChildren: bonesWithChildren.value.has(bone.name),
+      collapsed: collapsedBones.value.has(bone.name),
+    })
+  }
+
+  return result
 })
+
+// ── Scroll helpers ────────────────────────────────────────────────────────────
+
+const boneListRef   = ref<HTMLDivElement | null>(null)
+const attachListRef = ref<HTMLDivElement | null>(null)
+
+function scrollToSelected(listRef: typeof boneListRef, selector: string) {
+  nextTick(() => {
+    const el = listRef.value?.querySelector(selector) as HTMLElement | null
+    el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  })
+}
+
+// Expand all collapsed ancestors of a bone so it becomes visible in the tree
+function expandAncestors(boneName: string) {
+  const next = new Set(collapsedBones.value)
+  let current = skeletonStore.bones.find(b => b.name === boneName)
+  while (current?.parent) {
+    next.delete(current.parent)
+    current = skeletonStore.bones.find(b => b.name === current!.parent)
+  }
+  collapsedBones.value = next
+}
+
+// ── Sync selection ────────────────────────────────────────────────────────────
+
+function onSelectBone(boneName: string) {
+  skeletonStore.selectBone(boneName)
+  if (!skeletonStore.syncSelection) return
+  // Find the first active attachment whose slot belongs to this bone
+  const slotsForBone = new Set(skeletonStore.slots.filter(s => s.bone === boneName).map(s => s.name))
+  const att = inspectorStore.activeAttachments.find(a => slotsForBone.has(a.slotName))
+  skeletonStore.selectedSlot = att?.slotName ?? null
+  // Scroll attach list to the newly selected row
+  if (att) scrollToSelected(attachListRef, '.attach-row--selected')
+}
+
+function onSelectSlot(slotName: string) {
+  skeletonStore.selectSlot(slotName)
+  if (!skeletonStore.syncSelection) return
+  // Find the bone that owns this slot
+  const slotInfo = skeletonStore.slots.find(s => s.name === slotName)
+  const boneName = slotInfo?.bone ?? null
+  skeletonStore.selectedBone = boneName
+  // Expand tree so the bone is visible, then scroll to it
+  if (boneName) {
+    expandAncestors(boneName)
+    scrollToSelected(boneListRef, '.bone-row--selected')
+  }
+}
 
 function fmt(n: number): string {
   return n.toFixed(1)
@@ -200,8 +348,31 @@ function fmtS(n: number): string {
   font-variant-numeric: tabular-nums;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.tree-action-btn {
+  background: none;
+  border: none;
+  color: var(--c-text-faint);
+  cursor: pointer;
+  padding: 0 2px;
+  font-size: 0.85rem;
+  line-height: 1;
+  border-radius: 3px;
+  transition: color 0.12s;
+}
+
+.tree-action-btn:hover {
+  color: var(--c-text-dim);
+}
+
 .search-input {
-  max-width: 100px;
+  max-width: 90px;
 }
 
 .divider {
@@ -280,8 +451,7 @@ function fmtS(n: number): string {
 .bone-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 6px;
+  gap: 4px;
   padding-top: 2px;
   padding-bottom: 2px;
   padding-right: 8px;
@@ -289,8 +459,45 @@ function fmtS(n: number): string {
   min-height: 20px;
 }
 
+.bone-row {
+  cursor: pointer;
+}
+
 .bone-row:hover {
   background: var(--c-raised);
+}
+
+.bone-row--selected {
+  background: rgba(124, 106, 245, 0.15);
+}
+
+.bone-row--selected:hover {
+  background: rgba(124, 106, 245, 0.22);
+}
+
+/* Toggle icon: ▸ / ▾ for parent nodes, · for leaf nodes */
+.bone-toggle {
+  flex-shrink: 0;
+  width: 12px;
+  text-align: center;
+  font-size: 0.65rem;
+  line-height: 1;
+  color: var(--c-text-ghost);
+  user-select: none;
+}
+
+.bone-toggle--active {
+  cursor: pointer;
+  color: var(--c-text-faint);
+}
+
+.bone-toggle--active:hover {
+  color: var(--c-text-dim);
+}
+
+.bone-toggle--leaf {
+  cursor: default;
+  color: var(--c-text-ghost);
 }
 
 .bone-name {
@@ -314,6 +521,33 @@ function fmtS(n: number): string {
 
 .bone-scale {
   color: var(--c-text-ghost);
+}
+
+/* ── Attachment header ── */
+.attach-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sync-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.62rem;
+  color: var(--c-text-faint);
+  cursor: pointer;
+  user-select: none;
+}
+
+.sync-label:hover { color: var(--c-text-dim); }
+
+.sync-cb {
+  width: 10px;
+  height: 10px;
+  cursor: pointer;
+  accent-color: #7c6af5;
+  flex-shrink: 0;
 }
 
 /* ── Attachments ── */
@@ -340,8 +574,20 @@ function fmtS(n: number): string {
   border-radius: 4px;
 }
 
+.attach-row {
+  cursor: pointer;
+}
+
 .attach-row:hover {
   background: var(--c-raised);
+}
+
+.attach-row--selected {
+  background: rgba(96, 165, 250, 0.12);
+}
+
+.attach-row--selected:hover {
+  background: rgba(96, 165, 250, 0.2);
 }
 
 .attach-slot {

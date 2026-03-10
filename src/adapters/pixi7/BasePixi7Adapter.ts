@@ -11,6 +11,7 @@ import { buildImageResolver, waitForPixi7Textures } from '@/core/utils/buildImag
 import type {
   ISpineAdapter, BoneInfo, SlotInfo, EventInfo,
   TrackState, TrackQueueEntry, BoneTransform, AttachmentInfo, SpineEvent,
+  AnimationEventMarker, SlotBounds,
 } from '@/core/types/ISpineAdapter'
 import type { FileSet } from '@/core/types/FileSet'
 
@@ -34,6 +35,8 @@ export abstract class BasePixi7Adapter implements ISpineAdapter {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private _spine: any = null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private _skeletonData: any = null
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private _container: any = null
   private _eventUnsubscribers: Array<() => void> = []
@@ -73,6 +76,7 @@ export abstract class BasePixi7Adapter implements ISpineAdapter {
     }
 
     // 4. Create Spine display object
+    this._skeletonData = skeletonData
     this._spine = new mod.Spine(skeletonData)
 
     // 5. Fill public metadata
@@ -227,11 +231,13 @@ export abstract class BasePixi7Adapter implements ISpineAdapter {
 
   getBoneTransforms(): BoneTransform[] {
     if (!this._spine) return []
+    // pixi-spine uses yDown=true: bone.matrix.ty is negated (Pixi Y-down space).
+    // Negate Y to return Spine Y-up coordinates, consistent with Spine42Adapter.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return this._spine.skeleton.bones.map((b: any) => ({
       name: b.data.name,
       x: b.worldX ?? 0,
-      y: b.worldY ?? 0,
+      y: -(b.worldY ?? 0),
       rotation: b.worldRotation ?? 0,
       scaleX: b.scaleX ?? b.worldScaleX ?? 1,
       scaleY: b.scaleY ?? b.worldScaleY ?? 1,
@@ -248,6 +254,85 @@ export abstract class BasePixi7Adapter implements ISpineAdapter {
         attachmentName: s.attachment?.name ?? '',
         type: classifyAttachment(s.attachment),
       }))
+  }
+
+  getAnimationEvents(animationName: string): AnimationEventMarker[] {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const anim = this._skeletonData?.animations?.find((a: any) => a.name === animationName)
+    if (!anim) return []
+    const markers: AnimationEventMarker[] = []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const tl of anim.timelines ?? []) {
+      // frames may be Float32Array (spine 4.x) or Array (spine 3.8) — avoid Array.isArray
+      if (!Array.isArray(tl.events) || tl.frames == null) continue
+      for (let i = 0; i < tl.events.length; i++) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const evt: any = tl.events[i]
+        if (evt?.data?.name) markers.push({ name: evt.data.name, time: tl.frames[i] as number })
+      }
+    }
+    return markers
+  }
+
+  getSlotBounds(slotName: string): SlotBounds | null {
+    if (!this._spine) return null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const slot = this._spine.skeleton.findSlot(slotName) as any
+    if (!slot?.attachment) return null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const att = slot.attachment as any
+    if (typeof att.computeWorldVertices !== 'function') return null
+
+    const count: number = att.worldVerticesLength ?? 8
+    if (count < 2) return null
+    const verts = new Float32Array(count)
+
+    const typeName: string = att.constructor?.name ?? ''
+    const isMesh = /mesh/i.test(typeName) || att.triangles != null
+    // spine 4.x MeshAttachment.computeWorldVertices has 6 declared params,
+    // spine 3.8 MeshAttachment has 4 — use Function.length to distinguish
+    const fnLen: number = att.computeWorldVertices.length
+
+    // pixi-spine never calls updateOffset()/updateRegion() during normal sprite rendering
+    // (it uses PIXI.Sprite/Mesh directly). We must call it ourselves so the offset[] corners
+    // are filled before invoking computeWorldVertices.
+    //  • spine 3.8 / 4.0 → uses updateOffset()
+    //  • spine 4.1       → uses updateRegion() (updateOffset does not exist on _RegionAttachment)
+    if (!isMesh) {
+      try {
+        if (typeof att.updateOffset === 'function') att.updateOffset()
+        else if (typeof att.updateRegion === 'function') att.updateRegion()
+      } catch { /* region may be null for sequence attachments; computeWorldVertices will also fail */ }
+    }
+
+    try {
+      if (isMesh) {
+        if (fnLen >= 6) {
+          // spine 4.x: (slot, start, count, out, offset, stride)
+          att.computeWorldVertices(slot, 0, count, verts, 0, 2)
+        } else {
+          // spine 3.8: (slot, out, offset, stride)
+          att.computeWorldVertices(slot, verts, 0, 2)
+        }
+      } else {
+        // RegionAttachment — both versions have 4 params:
+        //   spine 4.x: (slot, out, offset, stride)
+        //   spine 3.8: (bone, out, offset, stride)
+        // Try slot first; if result is NaN, spine 3.8 needs bone instead
+        att.computeWorldVertices(slot, verts, 0, 2)
+        if (!isFinite(verts[0])) {
+          verts.fill(0)
+          att.computeWorldVertices(slot.bone, verts, 0, 2)
+        }
+      }
+    } catch {
+      return null
+    }
+
+    // pixi-spine yDown=true: vertices are in Pixi Y-down space. Negate Y to normalise
+    // to Spine Y-up so the caller can use the same formula as for Spine42Adapter.
+    for (let i = 1; i < count; i += 2) verts[i] = -verts[i]
+    return vertsToAABB(verts, count)
   }
 
   onEvent(cb: (e: SpineEvent) => void): () => void {
@@ -270,6 +355,19 @@ export abstract class BasePixi7Adapter implements ISpineAdapter {
     this._eventUnsubscribers.push(unsub)
     return unsub
   }
+}
+
+function vertsToAABB(verts: Float32Array, count: number): SlotBounds | null {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (let i = 0; i < count; i += 2) {
+    const x = verts[i], y = verts[i + 1]
+    if (!isFinite(x) || !isFinite(y)) return null
+    if (x < minX) minX = x
+    if (y < minY) minY = y
+    if (x > maxX) maxX = x
+    if (y > maxY) maxY = y
+  }
+  return isFinite(minX) ? { minX, minY, maxX, maxY } : null
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

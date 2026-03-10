@@ -58,6 +58,18 @@ export interface AttachmentInfo {
   type: 'region' | 'mesh' | 'clipping' | 'point' | 'boundingbox' | 'path' | 'other'
 }
 
+export interface AnimationEventMarker {
+  name: string
+  time: number
+}
+
+export interface SlotBounds {
+  minX: number
+  minY: number
+  maxX: number
+  maxY: number
+}
+
 export interface SpineEvent {
   trackIndex: number
   time: number
@@ -111,4 +123,10 @@ export interface ISpineAdapter {
 
   // Event subscription — returns unsubscribe function
   onEvent(cb: (e: SpineEvent) => void): () => void
+
+  // Returns event markers (name + time) for a given animation
+  getAnimationEvents(animationName: string): AnimationEventMarker[]
+
+  // Returns AABB of the slot's attachment in Spine world space (Y-up), or null if unavailable
+  getSlotBounds(slotName: string): SlotBounds | null
 }

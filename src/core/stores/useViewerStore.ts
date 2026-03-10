@@ -9,10 +9,11 @@
 import { defineStore } from 'pinia'
 
 export const useViewerStore = defineStore('viewer', () => {
-  const bgColor = ref(0x1a1a2e)
-  const zoom = ref(1)
-  const posX = ref(0)
-  const posY = ref(0)
+  const bgColor    = ref(0x1a1a2e)
+  const zoom       = ref(1)
+  const posX       = ref(0)
+  const posY       = ref(0)
+  const showOrigin = ref(false)
 
   function resetView() {
     zoom.value = 1
@@ -20,5 +21,5 @@ export const useViewerStore = defineStore('viewer', () => {
     posY.value = 0
   }
 
-  return { bgColor, zoom, posX, posY, resetView }
+  return { bgColor, zoom, posX, posY, showOrigin, resetView }
 })

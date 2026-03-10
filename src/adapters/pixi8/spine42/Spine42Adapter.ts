@@ -19,6 +19,7 @@ import {
 import type {
   ISpineAdapter, BoneInfo, SlotInfo, EventInfo,
   TrackState, TrackQueueEntry, BoneTransform, AttachmentInfo, SpineEvent,
+  AnimationEventMarker, SlotBounds,
 } from '@/core/types/ISpineAdapter'
 import type { FileSet } from '@/core/types/FileSet'
 
@@ -32,6 +33,8 @@ export default class Spine42Adapter implements ISpineAdapter {
   events: EventInfo[] = []
 
   private _spine: Spine | null = null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private _skeletonData: any = null
   private _container: PIXI.Container | null = null
   private _eventUnsubscribers: Array<() => void> = []
 
@@ -85,6 +88,7 @@ export default class Spine42Adapter implements ISpineAdapter {
     }
 
     // 4. Create Spine display object
+    this._skeletonData = skeletonData
     this._spine = new Spine({ skeletonData })
 
     // 5. Fill metadata
@@ -233,10 +237,13 @@ export default class Spine42Adapter implements ISpineAdapter {
 
   getBoneTransforms(): BoneTransform[] {
     if (!this._spine) return []
+    // spine-pixi-v8 sets Skeleton.yDown = true: bone.worldY is in Pixi Y-down space.
+    // Negate Y to return Spine Y-up coordinates, consistent with the coordinate convention
+    // expected by PreviewStage (which uses `baseY - y * zoom` for canvas positioning).
     return this._spine.skeleton.bones.map(b => ({
       name: b.data.name,
       x: b.worldX,
-      y: b.worldY,
+      y: -b.worldY,
       rotation: b.arotation,
       scaleX: b.ascaleX,
       scaleY: b.ascaleY,
@@ -253,6 +260,66 @@ export default class Spine42Adapter implements ISpineAdapter {
         attachmentName: (s.attachment as any)?.name ?? '',
         type: classifyAttachment(s.attachment),
       }))
+  }
+
+  getAnimationEvents(animationName: string): AnimationEventMarker[] {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const anim = this._skeletonData?.animations?.find((a: any) => a.name === animationName)
+    if (!anim) return []
+    const markers: AnimationEventMarker[] = []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const tl of anim.timelines ?? []) {
+      // frames may be Float32Array (spine 4.x) or Array (spine 3.8) — avoid Array.isArray
+      if (!Array.isArray(tl.events) || tl.frames == null) continue
+      for (let i = 0; i < tl.events.length; i++) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const evt: any = tl.events[i]
+        if (evt?.data?.name) markers.push({ name: evt.data.name, time: tl.frames[i] as number })
+      }
+    }
+    return markers
+  }
+
+  getSlotBounds(slotName: string): SlotBounds | null {
+    if (!this._spine) return null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const slot = this._spine.skeleton.findSlot(slotName) as any
+    if (!slot?.attachment) return null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const att = slot.attachment as any
+    if (typeof att.computeWorldVertices !== 'function') return null
+
+    const count: number = att.worldVerticesLength ?? 8
+    if (count < 2) return null
+    const verts = new Float32Array(count)
+
+    const typeName: string = att.constructor?.name ?? ''
+    const isMesh = /mesh/i.test(typeName) || att.triangles != null
+
+    try {
+      if (isMesh) {
+        // MeshAttachment: (slot, start, count, out, offset, stride)
+        att.computeWorldVertices(slot, 0, count, verts, 0, 2)
+      } else {
+        // RegionAttachment: (slot, out, offset, stride)
+        att.computeWorldVertices(slot, verts, 0, 2)
+      }
+    } catch {
+      return null
+    }
+
+    // spine-pixi-v8 sets Skeleton.yDown = true: vertices are in Pixi Y-down space.
+    // Negate Y to normalise to Spine Y-up so the caller uses the same formula for all adapters.
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    for (let i = 0; i < count; i += 2) {
+      const x = verts[i], y = -verts[i + 1]
+      if (!isFinite(x) || !isFinite(y)) return null
+      if (x < minX) minX = x
+      if (y < minY) minY = y
+      if (x > maxX) maxX = x
+      if (y > maxY) maxY = y
+    }
+    return isFinite(minX) ? { minX, minY, maxX, maxY } : null
   }
 
   onEvent(cb: (e: SpineEvent) => void): () => void {
