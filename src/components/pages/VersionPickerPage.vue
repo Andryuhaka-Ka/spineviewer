@@ -46,21 +46,17 @@
 
         <p class="spine-label">Spine runtime</p>
 
-        <div @click.stop>
-          <n-radio-group
-            :value="store.pixiVersion === pixi ? store.spineVersion : null"
-            @update:value="(v: SpineVersion) => store.selectVersion(pixi, v)"
+        <div class="spine-options" @click.stop>
+          <div
+            v-for="v in store.spineOptionsMap[pixi]"
+            :key="v"
+            class="spine-option"
+            :class="{ 'spine-option--active': store.pixiVersion === pixi && store.spineVersion === v }"
+            @click="store.selectVersion(pixi, v)"
           >
-            <n-space vertical :size="10">
-              <n-radio
-                v-for="v in store.spineOptionsMap[pixi]"
-                :key="v"
-                :value="v"
-              >
-                <span class="spine-ver">{{ v }}</span>
-              </n-radio>
-            </n-space>
-          </n-radio-group>
+            <span class="spine-option-label">{{ v }}</span>
+            <span class="spine-option-dot"></span>
+          </div>
         </div>
       </div>
     </div>
@@ -341,6 +337,8 @@ function formatSize(bytes: number): string {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  row-gap: 6px;
   margin-bottom: 8px;
 }
 
@@ -368,15 +366,16 @@ function formatSize(bytes: number): string {
 }
 
 .badge {
-  font-size: 0.65rem;
+  font-size: 0.6rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #4e9af1;
-  border: 1px solid #2a4a70;
   border-radius: 6px;
   padding: 2px 7px;
-  background: #0d1e30;
+  white-space: nowrap;
+  color: var(--c-badge-text);
+  border: 1px solid var(--c-badge-border);
+  background: var(--c-badge-bg);
 }
 
 .card-desc {
@@ -389,19 +388,73 @@ function formatSize(bytes: number): string {
   margin: 16px 0 !important;
 }
 
-/* ── Spine radios ────────────────────────────────────── */
+/* ── Spine options ───────────────────────────────────── */
 .spine-label {
   font-size: 0.7rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--c-text-ghost);
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
-.spine-ver {
-  font-size: 0.9rem;
+.spine-options {
+  display: flex;
+  gap: 8px;
+}
+
+.spine-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: transparent;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.spine-option:hover {
+  border-color: var(--c-text-ghost);
+  background: var(--c-raised);
+}
+
+.spine-option--active {
+  border-color: #7c6af5;
+  background: rgba(124, 106, 245, 0.08);
+}
+
+.spine-option-label {
+  font-size: 0.85rem;
+  font-weight: 600;
   color: var(--c-text-dim);
+  line-height: 1;
+}
+
+.spine-option--active .spine-option-label {
+  color: #9d8fff;
+}
+
+.spine-option-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1.5px solid var(--c-border);
+  background: transparent;
+  transition: border-color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+
+.spine-option:hover .spine-option-dot {
+  border-color: var(--c-text-ghost);
+}
+
+.spine-option--active .spine-option-dot {
+  border-color: #7c6af5;
+  background: #7c6af5;
+  box-shadow: 0 0 0 3px rgba(124, 106, 245, 0.2);
 }
 
 /* ── Drop section ────────────────────────────────────── */

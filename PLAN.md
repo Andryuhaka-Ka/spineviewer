@@ -683,3 +683,30 @@ export function buildImageResolver(images: SpineFile[]) {
 | `useVersionStore` — єдине джерело вибраної версії | Не передавати версію через props по дереву |
 | Адаптери — динамічний import (`await import(...)`) | Не завантажувати всі версії Pixi/Spine одночасно |
 .
+
+
+---
+
+## Наступна версія — відомі баги та допрацювання
+
+> Зміни що не входять у поточний план, але виявлені в процесі тестування.
+
+### Візуальні баги (v1.x)
+
+| # | Опис | Файл |
+|---|------|------|
+| p1.1a | Badge "recommended" вилазить за межі картки при шрифті "L" → `flex-wrap` на card-head | `VersionPickerPage.vue` |
+| p1.1b | Badge "recommended" темний на світлій темі → CSS змінні `--c-badge-*` у `themes.css` | `VersionPickerPage.vue` |
+| p1.3 | Atlas Viewer canvas-area зливається з фоном → checkerboard-фон + outline модалки | `AtlasInspector.vue` |
+| p1.4 | `--c-text-faint` (#555→#727) і `--c-text-ghost` (#444→#626) — підвищено контраст | `themes.css` |
+| p1.5 | Spine-версії на picker відображались у колонку → замінено на рядок кастомних radio-кнопок (лейбл зверху, кружечок знизу, обводка лише при hover/active) | `VersionPickerPage.vue` |
+| p1.6 | Atlas Inspector модальне вікно зливалось з фоном → `outline: 1px solid rgba(255,255,255,0.1)` | `AtlasInspector.vue` |
+
+**Статус:** ✅ Виправлено (2026-03-10)
+
+### UX покращення (Step 13, незавершені)
+
+| # | Опис |
+|---|------|
+| u1 | Resizable sidebar panel (drag-to-resize) |
+| u2 | Keyboard shortcuts у ViewerPage (Space, R, L, 0–9 тощо) |

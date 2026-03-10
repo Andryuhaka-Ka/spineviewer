@@ -734,6 +734,7 @@ onUnmounted(() => {
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+  outline: 1px solid rgba(255,255,255,0.1);
 }
 
 /* ── Modal header ── */
@@ -813,8 +814,19 @@ onUnmounted(() => {
   flex: 1;
   position: relative;
   overflow: hidden;
-  background: #080809;
+  /* Checkerboard: distinguishes canvas from modal bg in both themes */
+  background-color: #111318;
+  background-image:
+    repeating-conic-gradient(#1a1b22 0% 25%, #111318 0% 50%);
+  background-size: 20px 20px;
   cursor: crosshair;
+  border-right: 1px solid var(--c-border-dim);
+}
+
+:global(html.theme-light) .canvas-area {
+  background-color: #e8e8ee;
+  background-image:
+    repeating-conic-gradient(#d8d8e0 0% 25%, #e8e8ee 0% 50%);
 }
 
 .atlas-canvas {
