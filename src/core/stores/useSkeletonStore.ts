@@ -17,7 +17,7 @@ export const useSkeletonStore = defineStore('skeleton', () => {
   const events       = ref<EventInfo[]>([])
   const selectedBone    = ref<string | null>(null)
   const selectedSlot    = ref<string | null>(null)
-  const syncSelection   = ref(false)
+  const syncSelection   = ref(true)
 
   const isLoaded = computed(() => animations.value.length > 0)
 

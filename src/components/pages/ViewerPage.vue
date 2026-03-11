@@ -213,10 +213,6 @@ function onSetSkins(names: string[]) {
   stageRef.value?.setSkins(names)
 }
 
-function onSeekTo(track: number, time: number) {
-  stageRef.value?.seekTo(track, time)
-}
-
 // ── Export handlers ──────────────────────────────────────────────────────────
 
 async function onCapturePng() {

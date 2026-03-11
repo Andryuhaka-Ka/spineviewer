@@ -6,7 +6,7 @@
  * @built-with Claude Code (https://claude.ai/claude-code)
  */
 
-import * as PIXI from 'pixi7'
+import * as PIXI from 'pixi.js'
 import { buildImageResolver, waitForPixi7Textures } from '@/core/utils/buildImageResolver'
 import type {
   ISpineAdapter, BoneInfo, SlotInfo, EventInfo,

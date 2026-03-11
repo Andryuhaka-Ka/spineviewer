@@ -446,6 +446,7 @@ onMounted(async () => {
       await loadSpine(loaderStore.fileSet)
     }
   } catch (e) {
+    console.error('[PreviewStage] init error:', e)
     spineError.value = e instanceof Error ? e.message : 'Failed to initialize Pixi'
   } finally {
     loading.value = false

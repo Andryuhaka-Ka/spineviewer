@@ -11,11 +11,6 @@ import pkg from './package.json'
  * the 'pixi8' alias (pixi.js@8), so the Spine 4.2 adapter and Pixi8App share
  * one Pixi instance.
  *
- * Using this.resolve('pixi8') instead of a hardcoded path ensures the request
- * goes through Vite's normal resolution (alias + optimizeDeps pre-bundle).
- * This prevents eventemitter3 (CJS, nested inside pixi8/node_modules) from
- * being served raw to the browser — it gets bundled by esbuild instead.
- *
  * enforce:'pre' is required so the hook runs before Vite's built-in resolver.
  */
 function spinePixi8Redirect(): Plugin {
@@ -31,12 +26,33 @@ function spinePixi8Redirect(): Plugin {
   }
 }
 
+/**
+ * Redirects `import … from 'pixi.js'` inside @pixi-spine/* packages to
+ * the 'pixi7' alias, so all Spine 3.8/4.0/4.1 adapters and Pixi7App share
+ * one Pixi 7 instance. Without this, @pixi-spine pre-bundles its own copy of
+ * pixi.js, creating a second extensions registry where Renderer is never
+ * registered, causing "Unable to auto-detect a suitable renderer."
+ */
+function spinePixi7Redirect(): Plugin {
+  return {
+    name: 'spine-pixi7-redirect',
+    enforce: 'pre',
+    async resolveId(id, importer) {
+      if (id === 'pixi.js' && importer?.includes('@pixi-spine')) {
+        const resolved = await this.resolve('pixi7', importer, { skipSelf: true })
+        return resolved
+      }
+    },
+  }
+}
+
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
   },
   plugins: [
     vue(),
+    spinePixi7Redirect(),
     spinePixi8Redirect(),
     AutoImport({
       imports: ['vue', 'pinia', '@vueuse/core'],
@@ -55,10 +71,8 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    // pixi8 must be pre-bundled so esbuild converts its CJS deps (eventemitter3)
-    // to ESM. Without this the raw CJS file is served to the browser and fails.
-    include: ['pixi8'],
-    // Exclude spine packages so their pixi.js imports reach our resolveId hook.
+    include: ['pixi7', 'pixi8'],
+    // Exclude @esotericsoftware so their pixi.js imports reach spinePixi8Redirect.
     exclude: ['@esotericsoftware/spine-pixi-v8', '@esotericsoftware/spine-core'],
   },
 })

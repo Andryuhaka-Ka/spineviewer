@@ -151,7 +151,11 @@
             @click.stop
           />
           <span class="skin-name">{{ skin }}</span>
-          <n-button size="tiny" class="copy-btn" @click.stop="copyName(skin)" title="Copy name">⎘</n-button>
+          <button class="copy-btn" title="Copy name" @click.stop="copyName(skin)">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+          </button>
         </div>
       </div>
     </section>
@@ -202,6 +206,11 @@
         <!-- Currently playing entry -->
         <div class="track-entry track-entry--current">
           <span class="entry-icon">▶</span>
+          <button class="copy-btn" title="Copy name" @click.stop="copyName(track.animationName)">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+          </button>
           <span class="entry-name">{{ track.animationName }}</span>
         </div>
 
@@ -212,6 +221,11 @@
           class="track-entry track-entry--queued"
         >
           <span class="entry-icon">⏭</span>
+          <button class="copy-btn" title="Copy name" @click.stop="copyName(entry.animationName)">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+          </button>
           <span class="entry-name">{{ entry.animationName }}</span>
           <n-button
             size="tiny"
@@ -724,8 +738,9 @@ function onCascaderSelect(value: string | number | Array<string | number> | null
   color: var(--c-text-ghost);
   cursor: pointer;
   padding: 1px 3px;
+  line-height: 1;
   border-radius: 3px;
-  transition: color 0.1s;
+  transition: color 0.12s;
 }
 
 .copy-btn:hover { color: var(--c-text-muted); background: var(--c-raised); }

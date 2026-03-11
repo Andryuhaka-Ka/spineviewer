@@ -4,21 +4,17 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="76266a3f-c6bb-4d4e-a45c-2b17cdf27e49" name="Changes" comment="updated ui v1">
+    <list default="true" id="76266a3f-c6bb-4d4e-a45c-2b17cdf27e49" name="Changes" comment="updated functionality v1">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/PLAN.md" beforeDir="false" afterPath="$PROJECT_DIR$/PLAN.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/package-lock.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/adapters/pixi7/BasePixi7Adapter.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/adapters/pixi7/BasePixi7Adapter.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/adapters/pixi8/spine41/Spine41Adapter.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/adapters/pixi8/spine41/Spine41Adapter.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/adapters/pixi8/spine42/Spine42Adapter.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/adapters/pixi8/spine42/Spine42Adapter.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/adapters/pixi7/Pixi7App.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/adapters/pixi7/Pixi7App.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/components/pages/ViewerPage.vue" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/pages/ViewerPage.vue" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/components/panels/AnimationPanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/panels/AnimationPanel.vue" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/components/panels/SkeletonPanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/panels/SkeletonPanel.vue" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/components/stage/PreviewStage.vue" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/stage/PreviewStage.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/core/stores/useEventsStore.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/stores/useEventsStore.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/core/stores/useInspectorStore.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/stores/useInspectorStore.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/core/stores/useSkeletonStore.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/stores/useSkeletonStore.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/core/stores/useViewerStore.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/stores/useViewerStore.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/core/types/ISpineAdapter.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/types/ISpineAdapter.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/vite.config.ts" beforeDir="false" afterPath="$PROJECT_DIR$/vite.config.ts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -32,7 +28,7 @@
     </option>
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="95" />
+    <option name="cachedIndexableFilesCount" value="114" />
     <option name="fileBasedEmbeddingIndicesEnabled" value="true" />
   </component>
   <component name="Git.Settings">
@@ -65,6 +61,7 @@
     "SHARE_PROJECT_CONFIGURATION_FILES": "true",
     "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
     "git-widget-placeholder": "master",
+    "ignore.virus.scanning.warn.message": "true",
     "javascript.preferred.runtime.type.id": "node",
     "junie.onboarding.icon.badge.shown": "true",
     "last_opened_file_path": "D:/tools/spine_viewer/spine_viewer_pro/example",
@@ -109,8 +106,8 @@
     </configuration>
     <recent_temporary>
       <list>
-        <item itemvalue="npm.build" />
         <item itemvalue="npm.dev" />
+        <item itemvalue="npm.build" />
       </list>
     </recent_temporary>
   </component>
@@ -128,7 +125,8 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772542772095</updated>
-      <workItem from="1772542773282" duration="104023000" />
+      <workItem from="1772542773282" duration="107963000" />
+      <workItem from="1773162309652" duration="5971000" />
     </task>
     <task id="LOCAL-00001" summary="перший коміт">
       <option name="closed" value="true" />
@@ -290,7 +288,15 @@
       <option name="project" value="LOCAL" />
       <updated>1773141057187</updated>
     </task>
-    <option name="localTasksCounter" value="21" />
+    <task id="LOCAL-00021" summary="updated functionality v1">
+      <option name="closed" value="true" />
+      <created>1773157918374</created>
+      <option name="number" value="00021" />
+      <option name="presentableId" value="LOCAL-00021" />
+      <option name="project" value="LOCAL" />
+      <updated>1773157918374</updated>
+    </task>
+    <option name="localTasksCounter" value="22" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -324,6 +330,7 @@
     <MESSAGE value="added copyright" />
     <MESSAGE value="added project`s version" />
     <MESSAGE value="updated ui v1" />
-    <option name="LAST_COMMIT_MESSAGE" value="updated ui v1" />
+    <MESSAGE value="updated functionality v1" />
+    <option name="LAST_COMMIT_MESSAGE" value="updated functionality v1" />
   </component>
 </project>

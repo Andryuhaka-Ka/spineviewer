@@ -25,8 +25,10 @@
         <span class="file-size">{{ formatSize(skeletonInfo.size) }}</span>
       </div>
 
+      <div ref="wrapperRef" class="sections-wrapper">
+
       <!-- ── Bones ─────────────────────────────────────────── -->
-      <section class="section">
+      <section class="section section--bones" :style="boneMaxHeight !== undefined ? { maxHeight: boneMaxHeight } : {}">
         <div class="section-header">
           <label class="label">
             Bones
@@ -36,6 +38,10 @@
           <div class="header-actions">
             <button class="tree-action-btn" title="Expand all" @click="expandAll">⊞</button>
             <button class="tree-action-btn" title="Collapse all" @click="collapseAll">⊟</button>
+            <label class="sync-label" title="Sync bone ↔ attachment selection">
+              <input type="checkbox" v-model="skeletonStore.syncSelection" class="sync-cb" />
+              sync
+            </label>
             <n-input
               v-model:value="boneSearch"
               size="tiny"
@@ -75,22 +81,29 @@
       <div class="divider" />
 
       <!-- ── Active Attachments ──────────────────────────── -->
-      <section class="section">
-        <div class="attach-header">
-          <label class="label">
-            Attachments
-            <span class="count">({{ inspectorStore.activeAttachments.length }})</span>
-          </label>
-          <label class="sync-label" title="Sync bone ↔ attachment selection">
-            <input type="checkbox" v-model="skeletonStore.syncSelection" class="sync-cb" />
-            sync
-          </label>
-        </div>
+      <section ref="attachSectionRef" class="section section--attach">
+        <template v-if="inspectorStore.activeAttachments.length === 0">
+          <div class="attach-header">
+            <label class="label">
+              Attachments
+              <span class="count">(0)</span>
+            </label>
+          </div>
+          <div class="empty-hint small">None active</div>
+        </template>
 
-        <div v-if="inspectorStore.activeAttachments.length === 0" class="empty-hint small">
-          None active
-        </div>
         <div v-else ref="attachListRef" class="attach-list">
+          <!-- Header row as first table row — columns align automatically -->
+          <div class="attach-hdr-row">
+            <span class="ac ac--name">
+              <label class="label">
+                Attachments
+                <span class="count">({{ inspectorStore.activeAttachments.length }})</span>
+              </label>
+            </span>
+            <span class="ac ac--slot ac--hdr">Slot</span>
+            <span class="ac ac--type ac--hdr">Type</span>
+          </div>
           <div
             v-for="att in inspectorStore.activeAttachments"
             :key="att.slotName"
@@ -98,12 +111,18 @@
             :class="{ 'attach-row--selected': skeletonStore.selectedSlot === att.slotName }"
             @click="onSelectSlot(att.slotName)"
           >
-            <span class="attach-slot">{{ att.slotName }}</span>
-            <span class="attach-name" :title="att.attachmentName">{{ att.attachmentName }}</span>
-            <span class="attach-type" :class="`type-${att.type}`">{{ att.type }}</span>
+            <span class="ac ac--name">
+              <span class="ac-tip">{{ att.attachmentName }}</span>
+            </span>
+            <span class="ac ac--slot">{{ att.slotName }}</span>
+            <span class="ac ac--type">
+              <span class="attach-type" :class="`type-${att.type}`">{{ att.type }}</span>
+            </span>
           </div>
         </div>
       </section>
+
+      </div><!-- .sections-wrapper -->
     </template>
   </div>
 </template>
@@ -247,8 +266,34 @@ const visibleBones = computed(() => {
 
 // ── Scroll helpers ────────────────────────────────────────────────────────────
 
-const boneListRef   = ref<HTMLDivElement | null>(null)
-const attachListRef = ref<HTMLDivElement | null>(null)
+const boneListRef      = ref<HTMLDivElement | null>(null)
+const attachListRef    = ref<HTMLDivElement | null>(null)
+const wrapperRef       = ref<HTMLDivElement | null>(null)
+const attachSectionRef = ref<HTMLElement | null>(null)
+const boneMaxHeight    = ref<string | undefined>(undefined)
+
+function recalcBoneHeight() {
+  const wrapper  = wrapperRef.value
+  const attachEl = attachSectionRef.value
+  if (!wrapper || !attachEl) return
+  boneMaxHeight.value = Math.max(0, wrapper.clientHeight - attachEl.offsetHeight - 1) + 'px'
+}
+
+watch(visibleBones, () => nextTick(recalcBoneHeight))
+watch(() => inspectorStore.activeAttachments, () => nextTick(recalcBoneHeight))
+
+let _ro: ResizeObserver | null = null
+onMounted(() => {
+  nextTick(recalcBoneHeight)
+  if (wrapperRef.value) {
+    _ro = new ResizeObserver(recalcBoneHeight)
+    _ro.observe(wrapperRef.value)
+  }
+})
+onBeforeUnmount(() => {
+  _ro?.disconnect()
+  _ro = null
+})
 
 function scrollToSelected(listRef: typeof boneListRef, selector: string) {
   nextTick(() => {
@@ -314,11 +359,32 @@ function fmtS(n: number): string {
   color: var(--c-text);
 }
 
+.sections-wrapper {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .section {
   display: flex;
   flex-direction: column;
   gap: 4px;
   padding: 10px 10px 6px;
+}
+
+.section--bones {
+  flex: 0 0 auto;
+  overflow: hidden;
+}
+
+.section--attach {
+  flex: 0 0 auto;
+  max-height: 50%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .section-header {
@@ -437,7 +503,8 @@ function fmtS(n: number): string {
   display: flex;
   flex-direction: column;
   gap: 1px;
-  max-height: 260px;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--c-scroll) transparent;
@@ -550,12 +617,12 @@ function fmtS(n: number): string {
   flex-shrink: 0;
 }
 
-/* ── Attachments ── */
+/* ── Attachments grid ── */
 .attach-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  max-height: 160px;
+  display: grid;
+  grid-template-columns: 1fr minmax(0, 1fr) auto;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--c-scroll) transparent;
@@ -566,61 +633,88 @@ function fmtS(n: number): string {
 .attach-list::-webkit-scrollbar-thumb { background: var(--c-scroll); border-radius: 2px; }
 .attach-list::-webkit-scrollbar-thumb:hover { background: var(--c-scroll-hov); }
 
+/* Both header and data rows are transparent to grid — cells go directly into columns */
+.attach-hdr-row,
 .attach-row {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 2px 8px;
-  border-radius: 4px;
+  display: contents;
 }
 
 .attach-row {
   cursor: pointer;
 }
 
-.attach-row:hover {
-  background: var(--c-raised);
+.attach-row:hover .ac { background: var(--c-raised); }
+.attach-row--selected .ac { background: rgba(96, 165, 250, 0.12); }
+.attach-row--selected:hover .ac { background: rgba(96, 165, 250, 0.2); }
+
+/* Grid cells */
+.ac {
+  display: flex;
+  align-items: center;
+  padding: 2px 6px;
+  font-size: 0.72rem;
+  min-width: 0;
 }
 
-.attach-row--selected {
-  background: rgba(96, 165, 250, 0.12);
+.ac--name {
+  color: var(--c-text-dim);
 }
 
-.attach-row--selected:hover {
-  background: rgba(96, 165, 250, 0.2);
-}
-
-.attach-slot {
-  color: var(--c-text-muted);
-  flex-shrink: 0;
-  max-width: 80px;
+.ac--slot {
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  color: var(--c-text-muted);
+}
+
+.ac--type {
   white-space: nowrap;
 }
 
-.attach-name {
-  color: var(--c-text-dim);
-  flex: 1;
+/* Header cell labels */
+.attach-hdr-row .ac {
+  padding-bottom: 4px;
+}
+
+.ac--hdr {
+  font-size: 0.6rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--c-text-ghost);
+}
+
+/* Inner span for ellipsis — expands on hover */
+.ac-tip {
+  position: relative;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: default;
+}
+
+.ac-tip:hover {
+  overflow: visible;
+  z-index: 10;
+  background: var(--c-surface);
+  padding-right: 12px;
+  border-radius: 2px;
 }
 
 .attach-type {
-  font-size: 0.62rem;
+  display: inline-block;
+  font-size: 0.6rem;
   padding: 1px 4px;
   border-radius: 3px;
   background: var(--c-border-dim);
   color: var(--c-text-muted);
-  flex-shrink: 0;
 }
 
-.type-region  { color: #4ade80; background: rgba(74, 222, 128, 0.1); }
-.type-mesh    { color: #60a5fa; background: rgba(96, 165, 250, 0.1); }
+.type-region   { color: #4ade80; background: rgba(74,  222, 128, 0.1); }
+.type-mesh     { color: #60a5fa; background: rgba(96,  165, 250, 0.1); }
 .type-clipping { color: #f87171; background: rgba(248, 113, 113, 0.1); }
-.type-path    { color: #facc15; background: rgba(250, 204, 21, 0.1); }
+.type-path     { color: #facc15; background: rgba(250, 204,  21, 0.1); }
 
 .empty-hint {
   padding: 16px;

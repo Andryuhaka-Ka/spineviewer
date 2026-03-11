@@ -6,7 +6,7 @@
  * @built-with Claude Code (https://claude.ai/claude-code)
  */
 
-import * as PIXI from 'pixi7'
+import * as PIXI from 'pixi.js'
 import type { IPixiApp, ITrackOverlay, PixiTicker, RendererStats } from '@/core/types/IPixiApp'
 
 export class Pixi7App implements IPixiApp {
