@@ -156,6 +156,10 @@
         <span class="shortcut-item"><kbd>0–9</kbd><span>Track</span></span>
       </div>
     </div>
+
+    <footer class="copyright">
+      &copy; 2026 Andrii Karpus &mdash; Spine Viewer Pro
+    </footer>
   </div>
 </template>
 
@@ -598,6 +602,15 @@ function formatSize(bytes: number): string {
 /* ── Open button ─────────────────────────────────────── */
 .open-btn {
   min-width: 180px;
+}
+
+/* ── Copyright ───────────────────────────────────────── */
+.copyright {
+  font-size: 0.62rem;
+  color: var(--c-text-ghost);
+  letter-spacing: 0.04em;
+  text-align: center;
+  padding-bottom: 4px;
 }
 
 /* ── Shortcuts hint ──────────────────────────────────── */
