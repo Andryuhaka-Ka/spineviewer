@@ -38,7 +38,7 @@ export interface ComplexityReport {
   metrics:         ComplexityMetric[]
   recommendations: string[]
   animations:      AnimKeyframes[]
-  /** false when skeleton is binary (.skel) — mesh/keyframe analysis unavailable */
+  /** false when skeleton is binary (.skel) — keyframe analysis unavailable; mesh stats still available via runtime */
   fromJson:        boolean
 }
 
@@ -110,6 +110,25 @@ function scanAttachments(json: Record<string, unknown>): AttachmentStats {
   } else if (typeof skins === 'object' && skins) {
     // Spine 3.x: { skinName: { slotName: { attName: {...} } } }
     for (const skinAtts of Object.values(skins as object)) walkSkinSlots(skinAtts, stats)
+  }
+  return stats
+}
+
+// ── Attachment stats from runtime adapter (works for .skel too) ───────────────
+
+function collectFromRuntime(adapter: ISpineAdapter): AttachmentStats {
+  const stats: AttachmentStats = { meshCount: 0, clippingCount: 0, totalVertices: 0 }
+  const seen = new Set<string>()
+  for (const att of adapter.getAllAttachments()) {
+    const key = `${att.slotName}::${att.attachmentName}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    if (att.type === 'mesh') {
+      stats.meshCount++
+      if (att.vertexCount != null) stats.totalVertices += att.vertexCount
+    } else if (att.type === 'clipping') {
+      stats.clippingCount++
+    }
   }
   return stats
 }
@@ -260,7 +279,7 @@ export function analyzeComplexity(
     ? JSON.parse(fileSet.skeleton.fileBody as string)
     : null
 
-  const attStats    = json ? scanAttachments(json) : null
+  const attStats    = json ? scanAttachments(json) : collectFromRuntime(adapter)
   const utilization = atlasUtilization(atlasPages)
   const vramBytes   = atlasVram(atlasPages)
   const skelBytes   = typeof fileSet.skeleton.fileBody === 'string'

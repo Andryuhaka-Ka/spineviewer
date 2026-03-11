@@ -56,6 +56,8 @@ export interface AttachmentInfo {
   slotName: string
   attachmentName: string
   type: 'region' | 'mesh' | 'clipping' | 'point' | 'boundingbox' | 'path' | 'other'
+  /** Mesh vertex count — set by getAllAttachments(); not set by getActiveAttachments() */
+  vertexCount?: number
 }
 
 export interface AnimationEventMarker {
@@ -120,6 +122,8 @@ export interface ISpineAdapter {
   getTrackStates(): TrackState[]
   getBoneTransforms(): BoneTransform[]
   getActiveAttachments(): AttachmentInfo[]
+  // Returns all attachments across all skins from loaded skeleton data (works for binary .skel too)
+  getAllAttachments(): AttachmentInfo[]
 
   // Event subscription — returns unsubscribe function
   onEvent(cb: (e: SpineEvent) => void): () => void

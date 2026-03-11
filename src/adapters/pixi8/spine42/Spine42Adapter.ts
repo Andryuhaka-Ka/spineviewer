@@ -262,6 +262,41 @@ export default class Spine42Adapter implements ISpineAdapter {
       }))
   }
 
+  getAllAttachments(): AttachmentInfo[] {
+    if (!this._skeletonData) return []
+    const result: AttachmentInfo[] = []
+    const seen = new Set<string>()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const slots: any[] = this._skeletonData.slots ?? []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const skin of this._skeletonData.skins ?? []) {
+      // spine-core 4.x: skin.attachments is Array<Map<string, Attachment>>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const atts: any = skin.attachments
+      if (Array.isArray(atts)) {
+        for (let slotIdx = 0; slotIdx < atts.length; slotIdx++) {
+          const map = atts[slotIdx]
+          if (!map) continue
+          const slotName: string = slots[slotIdx]?.name ?? `slot_${slotIdx}`
+          const entries: Iterable<[string, unknown]> =
+            map instanceof Map ? map.entries() : Object.entries(map as object)
+          for (const [attName, att] of entries) {
+            const key = `${slotName}::${attName}`
+            if (seen.has(key)) continue
+            seen.add(key)
+            result.push({
+              slotName,
+              attachmentName: attName,
+              type: classifyAttachment(att),
+              vertexCount: spine42MeshVertexCount(att),
+            })
+          }
+        }
+      }
+    }
+    return result
+  }
+
   getAnimationEvents(animationName: string): AnimationEventMarker[] {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const anim = this._skeletonData?.animations?.find((a: any) => a.name === animationName)
@@ -344,6 +379,14 @@ export default class Spine42Adapter implements ISpineAdapter {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function spine42MeshVertexCount(att: any): number | undefined {
+  const typeName: string = att?.constructor?.name ?? ''
+  const isMesh = /mesh/i.test(typeName) || att?.triangles != null
+  if (!isMesh) return undefined
+  return att.worldVerticesLength != null ? att.worldVerticesLength / 2 : undefined
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function classifyAttachment(att: any): AttachmentInfo['type'] {

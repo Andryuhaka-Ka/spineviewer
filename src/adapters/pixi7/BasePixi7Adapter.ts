@@ -256,6 +256,58 @@ export abstract class BasePixi7Adapter implements ISpineAdapter {
       }))
   }
 
+  getAllAttachments(): AttachmentInfo[] {
+    if (!this._skeletonData) return []
+    const result: AttachmentInfo[] = []
+    const seen = new Set<string>()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const slots: any[] = this._skeletonData.slots ?? []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const skin of this._skeletonData.skins ?? []) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const atts: any = skin.attachments
+      if (Array.isArray(atts)) {
+        // spine 4.x: Array<Map<string, att>> indexed by slot index
+        for (let slotIdx = 0; slotIdx < atts.length; slotIdx++) {
+          const map = atts[slotIdx]
+          if (!map) continue
+          const slotName: string = slots[slotIdx]?.name ?? `slot_${slotIdx}`
+          const entries: Iterable<[string, unknown]> =
+            map instanceof Map ? map.entries() : Object.entries(map as object)
+          for (const [attName, att] of entries) {
+            const key = `${slotName}::${attName}`
+            if (seen.has(key)) continue
+            seen.add(key)
+            result.push({
+              slotName,
+              attachmentName: attName,
+              type: classifyAttachment(att),
+              vertexCount: meshVertexCount(att),
+            })
+          }
+        }
+      } else if (typeof atts === 'object' && atts) {
+        // spine 3.8: { [slotIdx]: { [attName]: att } }
+        for (const [slotIdxStr, slotAtts] of Object.entries(atts)) {
+          const slotIdx = parseInt(slotIdxStr, 10)
+          const slotName: string = slots[slotIdx]?.name ?? `slot_${slotIdx}`
+          for (const [attName, att] of Object.entries(slotAtts as object)) {
+            const key = `${slotName}::${attName}`
+            if (seen.has(key)) continue
+            seen.add(key)
+            result.push({
+              slotName,
+              attachmentName: attName,
+              type: classifyAttachment(att),
+              vertexCount: meshVertexCount(att),
+            })
+          }
+        }
+      }
+    }
+    return result
+  }
+
   getAnimationEvents(animationName: string): AnimationEventMarker[] {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const anim = this._skeletonData?.animations?.find((a: any) => a.name === animationName)
@@ -355,6 +407,14 @@ export abstract class BasePixi7Adapter implements ISpineAdapter {
     this._eventUnsubscribers.push(unsub)
     return unsub
   }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function meshVertexCount(att: any): number | undefined {
+  const typeName: string = att?.constructor?.name ?? ''
+  const isMesh = /mesh/i.test(typeName) || att?.triangles != null
+  if (!isMesh) return undefined
+  return att.worldVerticesLength != null ? att.worldVerticesLength / 2 : undefined
 }
 
 function vertsToAABB(verts: Float32Array, count: number): SlotBounds | null {
