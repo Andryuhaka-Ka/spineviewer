@@ -76,7 +76,13 @@
       >
         <template v-if="loaderStore.isLoaded">
           <span class="drop-state-icon">✓</span>
-          <p class="drop-text-ok">{{ loaderStore.pendingFileInfos.length }} files ready</p>
+          <p class="drop-text-ok">
+            {{ loaderStore.spineSlots.filter(s => !s.error).length }}
+            spine{{ loaderStore.spineSlots.filter(s => !s.error).length !== 1 ? 's' : '' }} ready
+            <template v-if="loaderStore.spineSlots.some(s => s.error)">
+              &middot; {{ loaderStore.spineSlots.filter(s => s.error).length }} error{{ loaderStore.spineSlots.filter(s => s.error).length !== 1 ? 's' : '' }}
+            </template>
+          </p>
           <p class="drop-hint">Drop again to replace</p>
         </template>
         <template v-else-if="classifyError">
@@ -166,7 +172,7 @@
 <script setup lang="ts">
 import { useVersionStore, type PixiVersion, type SpineVersion } from '@/core/stores/useVersionStore'
 import { useLoaderStore } from '@/core/stores/useLoaderStore'
-import { classifyFiles, getFilesFromDataTransfer } from '@/core/utils/fileLoader'
+import { groupSpineFiles, getFilesFromDataTransfer } from '@/core/utils/fileLoader'
 import { detectSpineVersion, detectSpineVersionFromSkel } from '@/core/utils/versionDetector'
 import SettingsPopover from '@/components/ui/SettingsPopover.vue'
 import type { SpineFileType } from '@/core/types/FileSet'
@@ -193,27 +199,35 @@ const TYPE_LABELS: Record<SpineFileType, string> = {
 
 async function handleFiles(files: File[]) {
   if (files.length === 0) return
-  isDragging.value      = false
-  classifyError.value   = null
-  versionUnknown.value  = false
+  isDragging.value     = false
+  classifyError.value  = null
+  versionUnknown.value = false
 
   // Show file names immediately while classifying
   loaderStore.setPendingFiles(files)
 
-  const result = await classifyFiles(files)
-  if (!result.ok) {
-    classifyError.value = result.error
-    // fileSet stays null → Open Viewer stays disabled
+  const result = await groupSpineFiles(files)
+
+  if (result.globalError) {
+    classifyError.value = result.globalError
+    return
+  }
+  if (result.slots.length === 0) {
+    classifyError.value = 'No valid Spine files found'
     return
   }
 
-  const { skeleton } = result.fileSet
-  const version =
-    skeleton.type === 'skeleton-json'
+  // Detect version from the first valid slot
+  const firstValid = result.slots.find(s => !s.error && s.fileSet)
+  let version: string | null = null
+  if (firstValid?.fileSet) {
+    const { skeleton } = firstValid.fileSet
+    version = skeleton.type === 'skeleton-json'
       ? detectSpineVersion(skeleton.fileBody as string)
       : detectSpineVersionFromSkel(skeleton.fileBody as ArrayBuffer)
+  }
 
-  loaderStore.setFileSet(result.fileSet, version)
+  loaderStore.setSlots(result.slots, version)
 
   if (version && version !== 'unknown') {
     autoSelectVersion(version)

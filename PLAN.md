@@ -748,3 +748,68 @@ export function buildImageResolver(images: SpineFile[]) {
 | 3.5d | **Blend mode badge в Insp** — в колонці Type показується кольоровий badge тільки для non-Normal слотів: `add` (оранжевий), `mul` (фіолетовий), `scr` (блакитний) | `SkeletonPanel.vue` |
 | 3.6 | **"Clipping" → "Mask"** — перейменовано всі відображувані лейбли (Compl метрика, Perf stat, Insp badge, рекомендації); внутрішній тип `'clipping'` в коді не змінено | `complexityAnalyzer.ts`, `ProfilerPanel.vue`, `SkeletonPanel.vue` |
 | 3.7 | **Нотатка в Compl** для binary `.skel` — оновлено з "clipping / mesh / vertex counts unavailable" на "keyframe analysis unavailable" (бо mesh/mask/region тепер рахуються через runtime fallback) | `ComplexityPanel.vue` |
+
+---
+
+## Функціональні доробки v1.3 ✅
+
+> **Статус:** Виконано повністю (2026-03-12).
+
+### 3.7 — Multi-Spine: завантаження та переключення між спайнами
+
+**Мета:** завантаження 1–30 спайнів одночасно з picker-сторінки та швидке переключення між ними у viewer з повним збереженням стану.
+
+#### Нові типи (`FileSet.ts`)
+
+- `SpineSlot` — слот одного спайна: `{ id, name, fileSet?, error?, savedState? }`
+- `SpineSlotSavedState` — збережений стан: viewport (zoom/posX/posY/speed) + анімація (selectedAnimation, currentTrack, loop, trackEnabled, trackPlaylists, wasPlaying)
+
+#### Новий утиліт (`fileLoader.ts`)
+
+- `groupSpineFiles(files)` — групує файли по спайнах:
+  - Крок 1: матч skeleton↔atlas за base-name (case-insensitive)
+  - Крок 2 (Variant B): авто-матч orphan-пар (залишкові skeleton + atlas 1-до-1)
+  - Крок 3 (Variant C): error-слот для skeleton без atlas
+  - Зображення матчаться по іменах, вказаних в atlas-файлі; fallback — всі зображення
+- Ліміт: 30 слотів (`SPINE_SLOTS_LIMIT`)
+
+#### Рефакторинг `useLoaderStore`
+
+| Було | Стало |
+|------|-------|
+| `fileSet: ref<FileSet\|null>` | `spineSlots: ref<SpineSlot[]>` |
+| `setFileSet(fs, version)` | `setSlots(slots, version)` |
+| — | `activeSlotId: ref<string\|null>` |
+| — | `activeSlot: computed` |
+| — | `setActiveSlot(id)` |
+| — | `saveSlotState(id, state)` |
+| — | `removeSlot(id)` |
+
+`fileSet` залишено як computed (backward-compat: `activeSlot?.fileSet ?? null`).
+
+#### UI
+
+- **`VersionPickerPage.vue`**: drop zone відображає `N spines ready · M errors`; `classifyFiles` замінено на `groupSpineFiles`
+- **`SpinesPanel.vue`** (новий компонент): список слотів, клік — переключення, помаранчева крапка `●` для змінених слотів; tooltip показує що саме змінено (Anim / Zoom / Pan / Speed)
+- **`ViewerPage.vue`**: вкладка **Spines** з'являється автоматично коли завантажено > 1 спайн; зникає при поверненні до 1 слота
+
+#### Логіка переключення (`PreviewStage.vue`)
+
+При зміні `loaderStore.activeSlotId`:
+1. Зберегти повний стан поточного слота → `loaderStore.saveSlotState(oldId, { ... })`
+2. `loadSpine(newSlot.fileSet)` — destroy старого адаптера, mount нового
+3. Відновити: viewport (posX/posY/zoom), speed, selectedAnimation, currentTrack, loop, trackEnabled, trackPlaylists
+4. Якщо `wasPlaying === true` → `animationStore.play()` (auto-resume)
+
+#### Збережений стан
+
+| Поле | Що зберігається |
+|------|-----------------|
+| `posX / posY / zoom` | Позиція та масштаб на канвасі |
+| `speed` | Швидкість відтворення |
+| `selectedAnimation` | Вибрана анімація в UI |
+| `currentTrack` | Активний трек (0–11) |
+| `loop` | Master loop прапор |
+| `trackEnabled` | Ввімкнені/вимкнені треки |
+| `trackPlaylists` | Повна черга анімацій по кожному треку |
+| `wasPlaying` | Чи грало → auto-resume при поверненні |

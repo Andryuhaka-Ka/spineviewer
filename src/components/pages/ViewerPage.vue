@@ -33,6 +33,9 @@
           :tabs-padding="8"
           class="side-tabs"
         >
+          <n-tab-pane v-if="loaderStore.spineSlots.length > 1" name="spines" tab="Spines" class="tab-pane">
+            <SpinesPanel />
+          </n-tab-pane>
           <n-tab-pane name="animation" tab="Anim" class="tab-pane">
             <AnimationPanel
               @set-animation="onSetAnimation"
@@ -85,6 +88,7 @@
 import PreviewStage from '@/components/stage/PreviewStage.vue'
 import AnimationPanel from '@/components/panels/AnimationPanel.vue'
 import SkeletonPanel from '@/components/panels/SkeletonPanel.vue'
+import SpinesPanel from '@/components/panels/SpinesPanel.vue'
 import AtlasInspector from '@/components/panels/AtlasInspector.vue'
 import ProfilerPanel    from '@/components/panels/ProfilerPanel.vue'
 import ComplexityPanel from '@/components/panels/ComplexityPanel.vue'
@@ -105,7 +109,15 @@ const animationStore  = useAnimationStore()
 const loaderStore     = useLoaderStore()
 const exportStore     = useExportStore()
 const stageRef      = ref<InstanceType<typeof PreviewStage> | null>(null)
-const activeTab     = ref<'animation' | 'inspector' | 'atlas' | 'perf' | 'compl' | 'export'>('animation')
+const activeTab     = ref<'spines' | 'animation' | 'inspector' | 'atlas' | 'perf' | 'compl' | 'export'>('animation')
+
+// Auto-switch away from Spines tab when only 1 spine remains
+watch(
+  () => loaderStore.spineSlots.length,
+  (count) => {
+    if (count <= 1 && activeTab.value === 'spines') activeTab.value = 'animation'
+  },
+)
 
 // ── Resizable side panel ──────────────────────────────────────────────────────
 const PANEL_MIN = 180

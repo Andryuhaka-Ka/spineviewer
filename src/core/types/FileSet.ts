@@ -21,3 +21,27 @@ export interface FileSet {
   atlas: SpineFile      // .atlas
   images: SpineFile[]   // .png / .jpg / .webp / .avif
 }
+
+export interface SpineSlotSavedState {
+  // Viewport
+  speed: number
+  posX: number
+  posY: number
+  zoom: number
+  // Animation
+  selectedAnimation: string | null
+  currentTrack: number
+  loop: boolean
+  trackEnabled: Record<number, boolean>
+  /** Full playlists per track — same shape as TrackQueueEntry[] */
+  trackPlaylists: Record<number, Array<{ animationName: string; loop: boolean }>>
+  wasPlaying: boolean
+}
+
+export interface SpineSlot {
+  id: string
+  name: string
+  fileSet?: FileSet             // undefined when error is set
+  error?: string                // set for unmatched / incomplete slots
+  savedState?: SpineSlotSavedState
+}

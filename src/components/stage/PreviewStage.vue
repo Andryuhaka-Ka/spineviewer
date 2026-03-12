@@ -458,9 +458,60 @@ onMounted(async () => {
         }
       },
     )
+    // Watch for active spine slot changes (multi-spine switching)
+    watch(
+      () => loaderStore.activeSlotId,
+      async (newId, oldId) => {
+        if (!newId || newId === oldId || loading.value) return
+        // Save full state of the slot we're leaving
+        if (oldId) {
+          loaderStore.saveSlotState(oldId, {
+            speed:              animationStore.speed,
+            posX:               viewerStore.posX,
+            posY:               viewerStore.posY,
+            zoom:               viewerStore.zoom,
+            selectedAnimation:  animationStore.selectedAnimation,
+            currentTrack:       animationStore.currentTrack,
+            loop:               animationStore.loop,
+            trackEnabled:       { ...animationStore.trackEnabled },
+            trackPlaylists:     JSON.parse(JSON.stringify(animationStore.trackPlaylists)),
+            wasPlaying:         animationStore.isPlaying,
+          })
+        }
+        // Load the new slot
+        const slot = loaderStore.spineSlots.find(s => s.id === newId)
+        if (slot?.fileSet) {
+          await loadSpine(slot.fileSet)
+          const s = slot.savedState
+          if (s) {
+            // Restore viewport
+            viewerStore.posX = s.posX
+            viewerStore.posY = s.posY
+            viewerStore.zoom = s.zoom
+            applyViewport()
+            // Restore animation controls
+            animationStore.speed              = s.speed
+            animationStore.selectedAnimation  = s.selectedAnimation
+            animationStore.currentTrack       = s.currentTrack
+            animationStore.loop               = s.loop
+            animationStore.trackEnabled       = { ...s.trackEnabled }
+            // Restore playlists
+            for (const [idxStr, playlist] of Object.entries(s.trackPlaylists)) {
+              animationStore.setTrackPlaylist(Number(idxStr), playlist)
+            }
+            // Resume playback if it was running
+            if (s.wasPlaying) {
+              animationStore.isPaused = false
+              animationStore.play()
+            }
+          }
+        }
+      },
+    )
+
     // Auto-load if files were pre-loaded from version picker
-    if (loaderStore.isLoaded && loaderStore.fileSet) {
-      await loadSpine(loaderStore.fileSet)
+    if (loaderStore.activeSlot?.fileSet) {
+      await loadSpine(loaderStore.activeSlot.fileSet)
     }
   } catch (e) {
     console.error('[PreviewStage] init error:', e)

@@ -8,7 +8,7 @@
 
 import { defineStore } from 'pinia'
 import { guessFileType } from '@/core/utils/fileLoader'
-import type { FileSet, SpineFileType } from '@/core/types/FileSet'
+import type { SpineFileType, SpineSlot, SpineSlotSavedState } from '@/core/types/FileSet'
 
 export interface PendingFileInfo {
   name: string
@@ -16,13 +16,26 @@ export interface PendingFileInfo {
   type: SpineFileType
 }
 
+/** Hard limit on simultaneously loaded spine slots */
+export const SPINE_SLOTS_LIMIT = 30
+
 export const useLoaderStore = defineStore('loader', () => {
   /** Raw File objects shown in the file list (not yet read into memory) */
   const pendingFiles = ref<File[]>([])
-  /** Fully read and classified file set, ready to pass to adapter.load() */
-  const fileSet = ref<FileSet | null>(null)
-  /** Spine version detected from the JSON skeleton field */
+  /** All loaded spine slots (up to SPINE_SLOTS_LIMIT) */
+  const spineSlots = ref<SpineSlot[]>([])
+  /** ID of the currently active spine slot */
+  const activeSlotId = ref<string | null>(null)
+  /** Spine version detected from the first valid slot's skeleton */
   const detectedVersion = ref<string | null>(null)
+
+  /** Currently active slot */
+  const activeSlot = computed(() =>
+    spineSlots.value.find(s => s.id === activeSlotId.value) ?? null,
+  )
+
+  /** Backward-compat: fileSet of active slot */
+  const fileSet = computed(() => activeSlot.value?.fileSet ?? null)
 
   /** Recognised files from pendingFiles (ignores unknown extensions) */
   const pendingFileInfos = computed<PendingFileInfo[]>(() =>
@@ -32,34 +45,66 @@ export const useLoaderStore = defineStore('loader', () => {
   )
 
   const hasFiles = computed(() => pendingFiles.value.length > 0)
-  const isLoaded = computed(() => fileSet.value !== null)
+  const isLoaded = computed(() => spineSlots.value.some(s => !s.error))
 
   function setPendingFiles(files: File[]) {
-    pendingFiles.value = files
-    fileSet.value = null
+    pendingFiles.value    = files
+    spineSlots.value      = []
+    activeSlotId.value    = null
     detectedVersion.value = null
   }
 
-  function setFileSet(fs: FileSet, version: string | null) {
-    fileSet.value = fs
+  /** Replace all slots; activates the first valid one. */
+  function setSlots(slots: SpineSlot[], version: string | null) {
+    spineSlots.value      = slots.slice(0, SPINE_SLOTS_LIMIT)
     detectedVersion.value = version
+    const first           = spineSlots.value.find(s => !s.error)
+    activeSlotId.value    = first?.id ?? null
+  }
+
+  function setActiveSlot(id: string) {
+    if (spineSlots.value.some(s => s.id === id)) {
+      activeSlotId.value = id
+    }
+  }
+
+  function saveSlotState(id: string, state: SpineSlotSavedState) {
+    const slot = spineSlots.value.find(s => s.id === id)
+    if (slot) slot.savedState = state
+  }
+
+  function removeSlot(id: string) {
+    const idx = spineSlots.value.findIndex(s => s.id === id)
+    if (idx < 0) return
+    spineSlots.value.splice(idx, 1)
+    if (activeSlotId.value === id) {
+      const next = spineSlots.value.find(s => !s.error)
+      activeSlotId.value = next?.id ?? null
+    }
   }
 
   function clear() {
-    pendingFiles.value = []
-    fileSet.value = null
+    pendingFiles.value    = []
+    spineSlots.value      = []
+    activeSlotId.value    = null
     detectedVersion.value = null
   }
 
   return {
     pendingFiles,
+    spineSlots,
+    activeSlotId,
+    activeSlot,
     fileSet,
     detectedVersion,
     pendingFileInfos,
     hasFiles,
     isLoaded,
     setPendingFiles,
-    setFileSet,
+    setSlots,
+    setActiveSlot,
+    saveSlotState,
+    removeSlot,
     clear,
   }
 })
