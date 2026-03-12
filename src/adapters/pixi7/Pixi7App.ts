@@ -35,13 +35,14 @@ export class Pixi7App implements IPixiApp {
         const origDE = gl.drawElements.bind(gl)
         const origDA = gl.drawArrays.bind(gl)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ;(gl as any).drawElements = (...args: any[]) => { inc(); return origDE(...args) }
+        ;(gl as any).drawElements = (...args: any[]) => { inc(); return (origDE as any)(...args) }
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ;(gl as any).drawArrays = (...args: any[]) => { inc(); return origDA(...args) }
+        ;(gl as any).drawArrays = (...args: any[]) => { inc(); return (origDA as any)(...args) }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         this._app.ticker.add(() => {
           this._lastDrawCalls = this._frameDrawCalls
           this._frameDrawCalls = 0
-        }, null, -100)
+        }, null, -100 as any)
       }
     } catch { /* GL wrapping not available */ }
   }
