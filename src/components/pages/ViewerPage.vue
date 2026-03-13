@@ -407,6 +407,9 @@ async function onCaptureGif(opts: { track: number; fps: number; quality: number 
 .spine-name-tag--skeleton-json { color: #60a5fa; }
 .spine-name-tag--skeleton-skel { color: #93c5fd; }
 
+:global(html.theme-light .spine-name-tag--skeleton-json) { color: #1d4ed8; }
+:global(html.theme-light .spine-name-tag--skeleton-skel) { color: #2563eb; }
+
 .spine-type-badge {
   flex-shrink: 0;
   font-size: 0.58rem;

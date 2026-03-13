@@ -28,7 +28,7 @@
           <span class="file-type-badge" :class="`file-type-badge--${info.type}`">
             {{ TYPE_LABELS[info.type] }}
           </span>
-          <span class="file-name" :title="info.name">{{ info.name }}</span>
+          <span class="file-name" :class="`file-name--${info.type}`" :title="info.name">{{ info.name }}</span>
           <span class="file-size">{{ formatSize(info.size) }}</span>
         </div>
       </div>
@@ -685,8 +685,13 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--c-text-dim);
 }
+
+.file-name--atlas { color: #c4b5fd; }
+.file-name--image { color: #86efac; }
+
+:global(html.theme-light .file-name--atlas) { color: #6d28d9; }
+:global(html.theme-light .file-name--image) { color: #15803d; }
 
 .file-size {
   flex-shrink: 0;
