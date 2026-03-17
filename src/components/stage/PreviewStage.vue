@@ -106,6 +106,24 @@
           </template>
         </div>
       </div>
+
+      <!-- Draw call sparkline -->
+      <div v-if="dcSparkline.points" class="dc-graph">
+        <div class="dc-header">
+          <span class="dc-title">DC</span>
+          <span class="dc-stats">
+            <span class="dc-val dc-val--muted">{{ dcSparkline.min }}</span>
+            <span class="dc-sep">–</span>
+            <span class="dc-val dc-val--cur">{{ dcSparkline.cur }}</span>
+            <span class="dc-sep">–</span>
+            <span class="dc-val dc-val--muted">{{ dcSparkline.max }}</span>
+          </span>
+        </div>
+        <svg class="dc-svg" viewBox="0 0 300 36" preserveAspectRatio="none">
+          <polygon :points="dcSparkline.fill" class="dc-fill" />
+          <polyline :points="dcSparkline.points" class="dc-line" />
+        </svg>
+      </div>
     </div>
 
     <div v-if="spineError" class="error-banner">
@@ -220,6 +238,43 @@ watch(
 // ── Event markers per track ────────────────────────────────────────────────────
 const eventMarkersMap = ref<Map<number, AnimationEventMarker[]>>(new Map())
 const hoveredMarker   = ref<{ name: string; time: number; trackIndex: number } | null>(null)
+
+// ── Draw call sparkline (normalized-position-based) ───────────────────────────
+// X-axis is the average normalized position (0–1) across all active tracks.
+// Each track contributes equally regardless of duration, so all track bars
+// share the same full-width axis and the DC graph aligns with all of them.
+// Raw array is written every frame (non-reactive); dcByTime snapshot triggers
+// the computed at the same 100 ms throttle as the profiler update.
+const DC_BUCKETS = 300
+const _dcRaw = new Array<number | null>(DC_BUCKETS).fill(null)
+const dcByTime = shallowRef<readonly (number | null)[]>([..._dcRaw])
+
+const dcSparkline = computed(() => {
+  const data = dcByTime.value
+  const vals = data.filter((v): v is number => v !== null)
+  if (vals.length < 2) return { points: '', fill: '', min: 0, max: 0, cur: 0 }
+
+  const max   = Math.max(...vals)
+  const min   = Math.min(...vals)
+  const range = max - min || 1
+  const W = 300, H = 36
+
+  let firstX = W, lastX = 0
+  const pts: string[] = []
+  data.forEach((v, i) => {
+    if (v === null) return
+    const x = (i / (DC_BUCKETS - 1)) * W
+    const y = H - ((v - min) / range) * (H - 6) - 3
+    if (x < firstX) firstX = x
+    if (x > lastX)  lastX  = x
+    pts.push(`${x.toFixed(1)},${y.toFixed(1)}`)
+  })
+
+  const points = pts.join(' ')
+  const fill   = `${firstX.toFixed(1)},${H} ${points} ${lastX.toFixed(1)},${H}`
+  const cur    = vals[vals.length - 1]
+  return { points, fill, min, max, cur }
+})
 
 function onBarMouseMove(e: MouseEvent, track: TrackState) {
   if (track.duration <= 0) return
@@ -361,6 +416,23 @@ onMounted(async () => {
         if (skeletonStore.selectedBone) inspectorStore.updateBones(spineAdapter.getBoneTransforms())
         if (skeletonStore.selectedSlot) updateSelectedSlotRect()
 
+        // Sample DC by average normalized position across all active tracks.
+        // normPos = mean(time_i % duration_i / duration_i) for all valid tracks.
+        const frameStats = pixiApp!.getStats()
+        if (typeof frameStats.drawCalls === 'number') {
+          const validTracks = states.filter(t => t.duration > 0)
+          if (validTracks.length > 0) {
+            let normSum = 0
+            for (const t of validTracks) {
+              const pos = t.loop ? t.time % t.duration : Math.min(t.time, t.duration)
+              normSum += pos / t.duration
+            }
+            const normPos = normSum / validTracks.length
+            const bucket  = Math.min(DC_BUCKETS - 1, Math.floor(normPos * DC_BUCKETS))
+            _dcRaw[bucket] = frameStats.drawCalls
+          }
+        }
+
         // Inspector + Atlas + Profiler: time-based throttle ~10 fps (100 ms).
         // Time-based avoids aliasing with short animation loops whose length
         // happens to be a multiple of a fixed frame count.
@@ -373,7 +445,8 @@ onMounted(async () => {
               .filter(a => a.type === 'region' || a.type === 'mesh')
               .map(a => a.attachmentName),
           )
-          profilerStore.updateStats(pixiApp!.getStats(), attachments)
+          profilerStore.updateStats(frameStats, attachments)
+          dcByTime.value = [..._dcRaw]
         }
       }
     }
@@ -383,6 +456,16 @@ onMounted(async () => {
       () => viewerStore.bgColor,
       (color) => pixiApp?.setBackground(color),
       { immediate: true },
+    )
+
+    // Reset DC position buffer when the animation set changes
+    watch(
+      () => animationStore.tracks.map(t => `${t.trackIndex}:${t.animationName}`).join(','),
+      () => {
+        _dcRaw.fill(null)
+        dcByTime.value = [..._dcRaw]
+      },
+      { deep: false },
     )
 
     // Update event markers when track animation changes
@@ -601,6 +684,9 @@ function onProgressDragStart(e: MouseEvent, trackIndex: number) {
 async function loadSpine(fileSet: FileSet): Promise<void> {
   if (!pixiApp) return
   spineError.value = null
+
+  _dcRaw.fill(null)
+  dcByTime.value = [..._dcRaw]
 
   // Destroy previous adapter
   if (spineAdapter) {
@@ -1092,5 +1178,62 @@ defineExpose({
   font-weight: 400;
   font-variant-numeric: tabular-nums;
   color: rgba(255,255,255,0.45);
+}
+
+/* ── Draw call sparkline ── */
+.dc-graph {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.dc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0 2px;
+}
+
+.dc-title {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.25);
+}
+
+.dc-stats {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.62rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.dc-val--muted { color: rgba(255,255,255,0.28); }
+.dc-val--cur   { color: #7c6af5; font-weight: 600; }
+
+.dc-sep { color: rgba(255,255,255,0.15); }
+
+.dc-svg {
+  width: 100%;
+  height: 36px;
+  display: block;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.dc-fill {
+  fill: rgba(124,106,245,0.12);
+}
+
+.dc-line {
+  fill: none;
+  stroke: rgba(124,106,245,0.75);
+  stroke-width: 1.5px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
 }
 </style>
