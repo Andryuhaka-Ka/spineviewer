@@ -9,6 +9,7 @@
 <template>
   <div class="picker">
     <div class="picker-top-bar">
+      <HelpModal />
       <SettingsPopover />
     </div>
 
@@ -175,6 +176,7 @@ import { useLoaderStore } from '@/core/stores/useLoaderStore'
 import { groupSpineFiles, getFilesFromDataTransfer } from '@/core/utils/fileLoader'
 import { detectSpineVersion, detectSpineVersionFromSkel } from '@/core/utils/versionDetector'
 import SettingsPopover from '@/components/ui/SettingsPopover.vue'
+import HelpModal from '@/components/ui/HelpModal.vue'
 import type { SpineFileType } from '@/core/types/FileSet'
 
 const emit = defineEmits<{ open: [] }>()
@@ -284,6 +286,9 @@ function formatSize(bytes: number): string {
   position: absolute;
   top: 16px;
   right: 20px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 /* ── Header ─────────────────────────────────────────── */

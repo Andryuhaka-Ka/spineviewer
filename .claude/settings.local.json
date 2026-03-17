@@ -18,7 +18,9 @@
       "Bash(xxd:*)",
       "Bash(python:*)",
       "Bash(grep \"\"version\"\":*)",
-      "Bash(sed:*)"
+      "Bash(sed:*)",
+      "Bash(node -e \"console.log\\(require\\(''./node_modules/vite/package.json''\\).version\\)\")",
+      "Bash(node -e \":*)"
     ]
   }
 }

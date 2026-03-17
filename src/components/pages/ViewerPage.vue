@@ -29,6 +29,7 @@
         @click="animationStore.isPlaying ? animationStore.pause() : animationStore.play()"
       >{{ animationStore.isPlaying ? '⏸' : (animationStore.isPaused ? '▶ Resume' : '▶ Play') }}</n-button>
       <SettingsPopover />
+      <HelpModal />
     </header>
 
     <div class="content">
@@ -101,6 +102,7 @@ import ProfilerPanel    from '@/components/panels/ProfilerPanel.vue'
 import ComplexityPanel from '@/components/panels/ComplexityPanel.vue'
 import ExportPanel from '@/components/panels/ExportPanel.vue'
 import SettingsPopover from '@/components/ui/SettingsPopover.vue'
+import HelpModal from '@/components/ui/HelpModal.vue'
 import { useVersionStore } from '@/core/stores/useVersionStore'
 import { useSkeletonStore } from '@/core/stores/useSkeletonStore'
 import { useAnimationStore } from '@/core/stores/useAnimationStore'

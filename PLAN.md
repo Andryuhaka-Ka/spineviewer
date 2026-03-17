@@ -6,6 +6,34 @@
 
 ---
 
+## Статус реалізації (v1.1.6)
+
+| Крок | Назва | Статус |
+|------|-------|--------|
+| Step 0 | Environment Setup | ✅ |
+| Step 1 | Version Picker Page | ✅ |
+| Step 2 | Adapter Factory + Canvas | ✅ |
+| Step 3 | File Loader | ✅ |
+| Step 4 | Spine Rendering | ✅ |
+| Step 5 | Animation Controls | ✅ |
+| Step 6 | Skins Panel + Composer | ✅ |
+| Step 7 | Skeleton Inspector | ✅ |
+| Step 7.5 | Theme & Font Size | ✅ |
+| Step 8 | Events Panel | ✅ |
+| Step 8.5 | Toolbar UX | ✅ |
+| Step 9 | Atlas Inspector | ✅ |
+| Step 10 | Performance Profiler | ✅ |
+| Step 11 | Complexity Analyzer | ✅ |
+| Step 12 | Export Panel | ✅ |
+| Step 13 | Polish & UX | ✅ |
+| v1.x | Visual Bug Fixes | ✅ |
+| v1.1 | Functional Additions | ✅ |
+| v1.2 | Bug Fixes + Features | ✅ |
+| v1.3 | Multi-Spine Support | ✅ |
+| v1.1.6 | Pixi DevTools, Favicon, DC Sparkline, Version fix | ✅ |
+
+---
+
 ## Структура адаптерів (архітектурне рішення)
 
 ```
@@ -726,6 +754,12 @@ export function buildImageResolver(images: SpineFile[]) {
 
 > **Статус:** Виконано повністю (2026-03-12).
 
+### Нові функції (v1.2)
+
+| # | Опис | Файли |
+|---|------|-------|
+| 3.0 | **`getAllAttachments()`** — новий метод в `ISpineAdapter` + реалізація у `BasePixi7Adapter` і `Spine42Adapter`; `complexityAnalyzer` використовує runtime fallback для `.skel` файлів (раніше повертав N/A) | `ISpineAdapter.ts`, `BasePixi7Adapter.ts`, `Spine42Adapter.ts`, `complexityAnalyzer.ts` |
+
 ### Виправлені баги
 
 | # | Опис | Файли |
@@ -752,6 +786,8 @@ export function buildImageResolver(images: SpineFile[]) {
 ---
 
 ## Функціональні доробки v1.3 ✅
+
+> **Статус:** Виконано повністю (2026-03-12).
 
 > **Статус:** Виконано повністю (2026-03-12).
 
@@ -813,3 +849,64 @@ export function buildImageResolver(images: SpineFile[]) {
 | `trackEnabled` | Ввімкнені/вимкнені треки |
 | `trackPlaylists` | Повна черга анімацій по кожному треку |
 | `wasPlaying` | Чи грало → auto-resume при поверненні |
+
+---
+
+## Зміни v1.1.6 ✅
+
+> **Статус:** Виконано повністю (2026-03-17). Версія в `package.json`: `1.1.6`.
+
+### Виправлені баги
+
+| # | Опис | Файли |
+|---|------|-------|
+| b4.1 | Версія білда не оновлювалась після bump — `import pkg from './package.json'` кешувався esbuild при трансформації конфігу. Виправлено через `readFileSync('package.json', 'utf-8')` — runtime-читання обходить кеш | `vite.config.ts` |
+| b4.2 | DC sparkline (мін/макс/поточне) не скидалась при рестарті анімації або при петлі — `_dcRaw` очищалась лише при зміні назви анімації. Виправлено: (1) очистка при `isPlaying → true` (свіжий play, не unpause); (2) детектування wrap-around в тікері (`_lastDcNormPos > 0.5 && normPos < 0.2`) | `PreviewStage.vue` |
+| b4.3 | `LoaderPanel.vue:187` — TS2551: `setFileSet` не існує (store рефакторений на multi-spine API `setSlots`). Виправлено виклик та `.name` → `.filename` на `SpineFile` | `LoaderPanel.vue` |
+
+### Нові функції
+
+| # | Опис | Файли |
+|---|------|-------|
+| 4.1 | **Pixi DevTools** — `globalThis.__PIXI_APP__ = app` після ініціалізації Pixi Application. Дозволяє використовувати розширення [Pixi Inspector](https://chromewebstore.google.com/detail/pixi-inspector/aamddddknhcagpehecnhphigffljadon) для Chrome | `Pixi7App.ts`, `Pixi8App.ts` |
+| 4.2 | **Favicon** — `public/favicon.svg` (SVG, темний фон + фіолетовий скелет); `public/favicon.ico` (ICO 16/24/32/48px, 32bpp BMP-in-ICO без зовнішніх залежностей); генератор `scripts/gen-favicon.mjs` | `public/favicon.svg`, `public/favicon.ico`, `scripts/gen-favicon.mjs`, `index.html` |
+| 4.3 | **DC sparkline reset при петлі** — окрім скидання при play, тепер також детектується wrap-around нормалізованої позиції (0→1→0) щоб автоматично очищати sparkline на кожен новий цикл | `PreviewStage.vue` |
+
+### Технічні деталі
+
+**DC sparkline wrap-around detection (`PreviewStage.vue`):**
+```typescript
+let _lastDcNormPos = -1  // tracker for loop wrap-around detection
+
+// In ticker (inside DC sampling block):
+if (_lastDcNormPos > 0.5 && normPos < 0.2) {
+  _dcRaw.fill(null)       // new cycle → clear sparkline
+}
+_lastDcNormPos = normPos
+
+// In watch(isPlaying) — fresh play (not unpause):
+if (!animationStore.isPaused) {
+  _dcRaw.fill(null)
+  dcByTime.value = [..._dcRaw]
+  _lastDcNormPos = -1
+}
+```
+
+**Build version injection (`vite.config.ts`):**
+```typescript
+import { readFileSync } from 'fs'
+const pkg = JSON.parse(readFileSync('package.json', 'utf-8')) as { version: string }
+
+export default defineConfig({
+  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
+  // ...
+})
+```
+> `readFileSync` — runtime-читання, обходить esbuild-кеш трансформації конфігу.
+
+**Favicon ICO генератор (`scripts/gen-favicon.mjs`):**
+- Генерує `public/favicon.ico` без зовнішніх залежностей
+- 32bpp BMP-in-ICO (підтримується з Windows Vista / всі сучасні браузери)
+- Розміри: 16×16, 24×24, 32×32, 48×48
+- Anti-aliased: SDF rounded-rect фон + лінії вздовж траєкторії
+- Запуск: `node scripts/gen-favicon.mjs`
