@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Dark rounded background -->
+  <rect width="32" height="32" rx="7" fill="#12121a"/>
+  <!-- Head -->
+  <circle cx="16" cy="6.5" r="3" fill="#7c6af5"/>
+  <!-- Spine -->
+  <line x1="16" y1="10" x2="16" y2="22" stroke="#7c6af5" stroke-width="2" stroke-linecap="round"/>
+  <!-- Arms -->
+  <line x1="16" y1="14.5" x2="8.5" y2="20" stroke="#7c6af5" stroke-width="1.7" stroke-linecap="round"/>
+  <line x1="16" y1="14.5" x2="23.5" y2="20" stroke="#7c6af5" stroke-width="1.7" stroke-linecap="round"/>
+  <!-- Legs -->
+  <line x1="16" y1="22" x2="10" y2="30" stroke="#7c6af5" stroke-width="1.7" stroke-linecap="round"/>
+  <line x1="16" y1="22" x2="22" y2="30" stroke="#7c6af5" stroke-width="1.7" stroke-linecap="round"/>
+</svg>

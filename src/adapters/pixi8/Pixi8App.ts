@@ -28,6 +28,10 @@ export class Pixi8App implements IPixiApp {
     })
     const instance = new Pixi8App(app)
 
+    // Expose app to Pixi DevTools browser extension
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(globalThis as any).__PIXI_APP__ = app
+
     // Count WebGL draw calls by wrapping the GL context.
     // Ticker at priority -100 runs after Pixi renders (priority -50), capturing per-frame count.
     try {

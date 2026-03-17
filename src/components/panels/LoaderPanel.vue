@@ -184,7 +184,7 @@ async function onLoad() {
     ? detectSpineVersion(result.fileSet.skeleton.fileBody as string)
     : null
 
-  loaderStore.setSlots([{ id: crypto.randomUUID(), name: result.fileSet.skeleton.name, fileSet: result.fileSet }], version)
+  loaderStore.setSlots([{ id: crypto.randomUUID(), name: result.fileSet.skeleton.filename, fileSet: result.fileSet }], version)
   isLoading.value = false
   emit('load', result.fileSet)
 }
