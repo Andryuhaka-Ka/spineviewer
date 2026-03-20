@@ -162,6 +162,12 @@ onMounted(async () => {
     })
     ro.observe(canvas.parentElement ?? canvas)
     onUnmounted(() => ro.disconnect())
+
+    // Load initial fileSet if already provided (handles the race where the prop
+    // is set before onMounted completes because createPixiApp is async)
+    if (props.fileSet) {
+      await loadFileSet(props.fileSet)
+    }
   } catch (e) {
     loadError.value = e instanceof Error ? e.message : 'Failed to initialize canvas'
   }
@@ -177,7 +183,9 @@ onUnmounted(() => {
 
 watch(
   () => props.fileSet,
-  async (fileSet) => {
+  async (fileSet, oldFileSet) => {
+    // Skip if same reference (already loaded by onMounted initial load)
+    if (fileSet === oldFileSet) return
     if (!fileSet) {
       destroyAdapter()
       return
