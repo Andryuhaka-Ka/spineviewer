@@ -142,15 +142,25 @@
       </div>
     </div>
 
-    <n-button
-      type="primary"
-      size="large"
-      class="open-btn"
-      :disabled="!store.isReady || !loaderStore.isLoaded"
-      @click="emit('open')"
-    >
-      Open Viewer
-    </n-button>
+    <div class="action-btns">
+      <n-button
+        type="primary"
+        size="large"
+        class="open-btn"
+        :disabled="!store.isReady || !loaderStore.isLoaded"
+        @click="emit('open')"
+      >
+        Open Viewer
+      </n-button>
+      <n-button
+        v-if="loaderStore.spineSlots.filter(s => !s.error).length >= 2"
+        size="large"
+        class="compare-btn"
+        @click="emit('open-compare', { left: 0, right: 1 })"
+      >
+        ⇄ Compare
+      </n-button>
+    </div>
 
     <div class="shortcuts-hint">
       <span class="shortcuts-title">Keyboard shortcuts</span>
@@ -179,7 +189,10 @@ import SettingsPopover from '@/components/ui/SettingsPopover.vue'
 import HelpModal from '@/components/ui/HelpModal.vue'
 import type { SpineFileType } from '@/core/types/FileSet'
 
-const emit = defineEmits<{ open: [] }>()
+const emit = defineEmits<{
+  open:         []
+  'open-compare': [payload: { left: number; right: number }]
+}>()
 
 const appVersion = __APP_VERSION__
 
@@ -618,10 +631,17 @@ function formatSize(bytes: number): string {
   font-variant-numeric: tabular-nums;
 }
 
-/* ── Open button ─────────────────────────────────────── */
-.open-btn {
-  min-width: 180px;
+/* ── Action buttons ──────────────────────────────────── */
+.action-btns {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
 }
+
+.open-btn    { min-width: 160px; }
+.compare-btn { min-width: 120px; }
 
 /* ── Copyright ───────────────────────────────────────── */
 .copyright {

@@ -28,6 +28,12 @@
         class="toolbar-play-btn"
         @click="animationStore.isPlaying ? animationStore.pause() : animationStore.play()"
       >{{ animationStore.isPlaying ? '⏸' : (animationStore.isPaused ? '▶ Resume' : '▶ Play') }}</n-button>
+      <n-button
+        size="small"
+        class="compare-toolbar-btn"
+        @click="emit('open-compare', { left: loaderStore.spineSlots.findIndex(s => s.id === loaderStore.activeSlotId) })"
+        title="Open Compare mode"
+      >⇄ Compare</n-button>
       <SettingsPopover />
       <HelpModal />
     </header>
@@ -110,7 +116,10 @@ import { useLoaderStore } from '@/core/stores/useLoaderStore'
 import { useExportStore } from '@/core/stores/useExportStore'
 import { downloadBlob, downloadJson, canvasToBlob, buildSpriteSheet } from '@/core/utils/exportUtils'
 
-const emit = defineEmits<{ back: [] }>()
+const emit = defineEmits<{
+  back:           []
+  'open-compare': [payload?: { left?: number }]
+}>()
 
 const versionStore    = useVersionStore()
 const skeletonStore   = useSkeletonStore()
@@ -398,7 +407,8 @@ async function onCaptureGif(opts: { track: number; fps: number; quality: number 
 
 .toolbar-spacer { flex: 1; }
 
-.toolbar-play-btn { min-width: 80px; }
+.toolbar-play-btn    { min-width: 80px; }
+.compare-toolbar-btn { flex-shrink: 0; }
 
 .back-btn {
   background: none;
