@@ -8,11 +8,18 @@
 
 <template>
   <div
+    ref="containerRef"
     class="canvas-slot"
     :class="{
-      'canvas-slot--empty': !currentFileSet,
+      'canvas-slot--empty': !hasFileSet,
       'canvas-slot--drag':  isDragging,
+      'canvas-slot--pan':   isPanning,
     }"
+    @mousedown="onPanStart"
+    @mousemove="onPanMove"
+    @mouseup="onPanEnd"
+    @mouseleave="onPanEnd"
+    @dblclick="onResetView"
     @dragover.prevent="isDragging = true"
     @dragleave.prevent="isDragging = false"
     @drop.prevent="onDrop"
@@ -20,8 +27,8 @@
     <!-- Canvas -->
     <canvas ref="canvasRef" class="slot-canvas" />
 
-    <!-- Empty state (shown over canvas when no file) -->
-    <div v-if="!currentFileSet" class="empty-state">
+    <!-- Empty state -->
+    <div v-if="!hasFileSet && !isLoading" class="empty-state">
       <span class="empty-icon">{{ isDragging ? '⬇' : '○' }}</span>
       <span class="empty-label">{{ isDragging ? 'Drop Spine files' : 'No file loaded' }}</span>
       <span class="empty-hint">Drop files here or use the toolbar selector</span>
@@ -37,22 +44,35 @@
       <span class="error-text">{{ loadError }}</span>
     </div>
 
+    <!-- Top-left overlay: bg color + center button -->
+    <div v-if="hasFileSet" class="overlay-tl">
+      <input
+        type="color"
+        class="bg-input"
+        :value="bgColorHex"
+        title="Background color"
+        @input="onBgColorInput"
+        @click.stop
+      />
+      <span class="overlay-hint" title="Double-click canvas to center">bg</span>
+    </div>
+
+    <!-- Top-right: FPS -->
+    <div class="overlay-tr">
+      <span class="fps-badge" :class="fpsClass">{{ fps }} FPS</span>
+    </div>
+
     <!-- Control bar -->
-    <div class="control-bar">
+    <div class="control-bar" @mousedown.stop @dblclick.stop>
       <span class="slot-side-badge">{{ side === 'left' ? 'A' : 'B' }}</span>
 
       <template v-if="adapter">
-        <!-- Animation selector -->
-        <select
-          class="anim-select"
-          :value="currentAnimName"
-          @change="onAnimChange"
-        >
-          <option v-if="!currentAnimName" value="" disabled>— select animation —</option>
+        <select class="anim-select" :value="currentAnimName ?? ''" @change="onAnimChange">
+          <option v-if="!currentAnimName" value="" disabled>— select —</option>
           <option v-for="name in animationNames" :key="name" :value="name">{{ name }}</option>
         </select>
 
-        <!-- Play / Pause (master only) -->
+        <!-- Play/Pause: master only -->
         <template v-if="isMaster">
           <button class="ctrl-btn" @click="togglePlay">
             {{ isPlaying ? '⏸' : '▶' }}
@@ -64,11 +84,8 @@
           </span>
         </template>
 
-        <!-- Current time -->
         <span class="time-display">{{ timeDisplay }}</span>
-
-        <!-- FPS -->
-        <span class="fps-display">{{ fps }} FPS</span>
+        <span class="fps-inline">{{ fps }} FPS</span>
       </template>
       <template v-else>
         <span class="empty-bar-hint">—</span>
@@ -78,6 +95,7 @@
 </template>
 
 <script setup lang="ts">
+import { useResizeObserver } from '@vueuse/core'
 import type { IPixiApp } from '@/core/types/IPixiApp'
 import type { ISpineAdapter } from '@/core/types/ISpineAdapter'
 import type { FileSet } from '@/core/types/FileSet'
@@ -88,26 +106,54 @@ import { useCompareStore } from '@/core/stores/useCompareStore'
 // ── Props ──────────────────────────────────────────────────────────────────────
 
 const props = defineProps<{
-  side:        'left' | 'right'
-  fileSet:     FileSet | null
+  side:    'left' | 'right'
+  fileSet: FileSet | null
 }>()
 
-// ── Refs ───────────────────────────────────────────────────────────────────────
+const emit = defineEmits<{
+  'viewport-change': [vp: { posX: number; posY: number; zoom: number }]
+}>()
 
-const canvasRef = ref<HTMLCanvasElement | null>(null)
+// ── DOM refs ───────────────────────────────────────────────────────────────────
 
-const pixiApp  = ref<IPixiApp | null>(null)
+const containerRef = ref<HTMLDivElement | null>(null)
+const canvasRef    = ref<HTMLCanvasElement | null>(null)
+
+// ── Internal state (non-reactive for perf) ────────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let spineObj: any   = null
+let pixiAppInst: IPixiApp | null = null
+let adapterInst: ISpineAdapter | null = null
+let tickerFn: (() => void) | null = null
+
+// ── Reactive state ────────────────────────────────────────────────────────────
+
 const adapter  = ref<ISpineAdapter | null>(null)
+const pixiApp  = ref<IPixiApp | null>(null)
 
 const isLoading = ref(false)
 const loadError = ref<string | null>(null)
 const isDragging = ref(false)
+const isPanning  = ref(false)
 
+// Viewport
+const baseX = ref(0)
+const baseY = ref(0)
+const posX  = ref(0)
+const posY  = ref(0)
+const zoom  = ref(1)
+const bgColor = ref(0x111113)
+
+// Animation controls
 const currentAnimName = ref<string | null>(null)
 const isPlaying       = ref(false)
 const fps             = ref(0)
 const currentTime     = ref(0)
 const animDuration    = ref(0)
+
+// Pan state
+let panStart = { x: 0, y: 0, px: 0, py: 0 }
 
 // ── Stores ─────────────────────────────────────────────────────────────────────
 
@@ -116,9 +162,18 @@ const compareStore = useCompareStore()
 
 // ── Computed ───────────────────────────────────────────────────────────────────
 
+const hasFileSet     = computed(() => props.fileSet !== null)
 const animationNames = computed(() => adapter.value?.animations ?? [])
 const isMaster       = computed(() => compareStore.masterSide === props.side)
 const syncEnabled    = computed(() => compareStore.syncEnabled)
+
+const bgColorHex = computed(() => '#' + bgColor.value.toString(16).padStart(6, '0'))
+
+const fpsClass = computed(() => {
+  if (fps.value < 30) return 'fps--bad'
+  if (fps.value < 55) return 'fps--ok'
+  return 'fps--good'
+})
 
 const timeDisplay = computed(() => {
   const t = currentTime.value
@@ -126,45 +181,54 @@ const timeDisplay = computed(() => {
   return `${t.toFixed(2)}s${d > 0 ? ` / ${d.toFixed(2)}s` : ''}`
 })
 
-const currentFileSet = computed(() => props.fileSet)
+// ── Expose ─────────────────────────────────────────────────────────────────────
+
+defineExpose({
+  adapter,
+  pixiApp,
+  getTrackTime,
+  seekTo:             seekToTime,
+  setAnimationByName,
+  setViewport,
+  getAnimationNames:  () => animationNames.value,
+})
 
 // ── Pixi app lifecycle ─────────────────────────────────────────────────────────
 
 onMounted(async () => {
-  if (!canvasRef.value) return
-  const canvas = canvasRef.value
-  const w = canvas.parentElement?.clientWidth  || 400
-  const h = canvas.parentElement?.clientHeight || 400
+  const canvas    = canvasRef.value!
+  const container = containerRef.value!
+  container.addEventListener('wheel', onWheel, { passive: false })
+
   try {
     if (!versionStore.pixiVersion) return
-    pixiApp.value = await createPixiApp(versionStore.pixiVersion, canvas, w, h)
+    const { width, height } = container.getBoundingClientRect()
+    pixiAppInst = await createPixiApp(
+      versionStore.pixiVersion,
+      canvas,
+      Math.max(width, 1),
+      Math.max(height, 1),
+    )
+    pixiApp.value = pixiAppInst
 
-    // FPS ticker
-    pixiApp.value.ticker.add(() => {
-      fps.value = Math.round(pixiApp.value!.ticker.FPS)
-      if (adapter.value) {
-        const states = adapter.value.getTrackStates()
+    // Apply initial bg
+    pixiAppInst.setBackground(bgColor.value)
+
+    // FPS + time ticker
+    tickerFn = () => {
+      fps.value = Math.round(pixiAppInst!.ticker.FPS)
+      if (adapterInst) {
+        const states = adapterInst.getTrackStates()
         const t0 = states.find(s => s.trackIndex === 0)
         if (t0) {
-          currentTime.value = t0.time
+          currentTime.value  = t0.time
           animDuration.value = t0.duration
         }
       }
-    })
+    }
+    pixiAppInst.ticker.add(tickerFn)
 
-    // ResizeObserver
-    const ro = new ResizeObserver(entries => {
-      const entry = entries[0]
-      if (entry && pixiApp.value) {
-        const { width, height } = entry.contentRect
-        if (width > 0 && height > 0) pixiApp.value.resize(width, height)
-      }
-    })
-    ro.observe(canvas.parentElement ?? canvas)
-    onUnmounted(() => ro.disconnect())
-
-    // Load initial fileSet if already provided (handles the race where the prop
-    // is set before onMounted completes because createPixiApp is async)
+    // Load initial fileSet if already provided (handles async init race)
     if (props.fileSet) {
       await loadFileSet(props.fileSet)
     }
@@ -174,9 +238,22 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  containerRef.value?.removeEventListener('wheel', onWheel)
   destroyAdapter()
-  pixiApp.value?.destroy()
+  if (pixiAppInst && tickerFn) pixiAppInst.ticker.remove(tickerFn)
+  pixiAppInst?.destroy()
+  pixiAppInst = null
   pixiApp.value = null
+})
+
+useResizeObserver(containerRef, ([entry]) => {
+  const { width, height } = entry.contentRect
+  if (width > 0 && height > 0) {
+    pixiAppInst?.resize(width, height)
+    baseX.value = width / 2
+    baseY.value = height * 0.5
+    applyViewport()
+  }
 })
 
 // ── Watch fileSet prop ─────────────────────────────────────────────────────────
@@ -184,12 +261,8 @@ onUnmounted(() => {
 watch(
   () => props.fileSet,
   async (fileSet, oldFileSet) => {
-    // Skip if same reference (already loaded by onMounted initial load)
     if (fileSet === oldFileSet) return
-    if (!fileSet) {
-      destroyAdapter()
-      return
-    }
+    if (!fileSet) { destroyAdapter(); return }
     await loadFileSet(fileSet)
   },
 )
@@ -197,7 +270,7 @@ watch(
 // ── Load / destroy ─────────────────────────────────────────────────────────────
 
 async function loadFileSet(fileSet: FileSet) {
-  if (!pixiApp.value) return
+  if (!pixiAppInst) return
   destroyAdapter()
 
   isLoading.value = true
@@ -207,8 +280,19 @@ async function loadFileSet(fileSet: FileSet) {
     if (!versionStore.pixiVersion || !versionStore.spineVersion) return
     const newAdapter = await createSpineAdapter(versionStore.pixiVersion, versionStore.spineVersion)
     await newAdapter.load(fileSet)
-    newAdapter.mount(pixiApp.value.stage)
+    newAdapter.mount(pixiAppInst.stage)
+    adapterInst   = newAdapter
     adapter.value = newAdapter
+
+    // Grab spine container reference
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    spineObj = (pixiAppInst.stage as any).children?.at(-1) ?? null
+
+    // Center viewport
+    const { width, height } = containerRef.value!.getBoundingClientRect()
+    baseX.value = width  / 2
+    baseY.value = height * 0.5
+    resetView()
 
     // Start first animation
     const anims = newAdapter.animations
@@ -225,41 +309,133 @@ async function loadFileSet(fileSet: FileSet) {
 }
 
 function destroyAdapter() {
-  if (!adapter.value) return
-  adapter.value.destroy()
+  if (!adapterInst) return
+  adapterInst.destroy()
+  adapterInst   = null
   adapter.value = null
+  spineObj      = null
   currentAnimName.value = null
-  isPlaying.value = false
-  currentTime.value = 0
-  animDuration.value = 0
+  isPlaying.value       = false
+  currentTime.value     = 0
+  animDuration.value    = 0
+}
+
+// ── Viewport ──────────────────────────────────────────────────────────────────
+
+function applyViewport() {
+  if (!spineObj) return
+  spineObj.x = baseX.value + posX.value
+  spineObj.y = baseY.value + posY.value
+  spineObj.scale.set(zoom.value)
+}
+
+function resetView() {
+  posX.value = 0
+  posY.value = 0
+  zoom.value = 1
+  applyViewport()
+}
+
+function onResetView() {
+  resetView()
+  emitViewport()
+}
+
+function onWheel(e: WheelEvent) {
+  if (!spineObj || !containerRef.value) return
+  e.preventDefault()
+
+  const rect = containerRef.value.getBoundingClientRect()
+  const mx = e.clientX - rect.left
+  const my = e.clientY - rect.top
+
+  const dz = e.deltaMode === 0
+    ? Math.exp(-e.deltaY * 0.004)
+    : e.deltaY < 0 ? 1.15 : 1 / 1.15
+
+  const newZoom = Math.min(20, Math.max(0.05, zoom.value * dz))
+  if (newZoom === zoom.value) return
+
+  // Zoom towards cursor
+  const spX = (mx - baseX.value - posX.value) / zoom.value
+  const spY = (my - baseY.value - posY.value) / zoom.value
+  posX.value = mx - baseX.value - spX * newZoom
+  posY.value = my - baseY.value - spY * newZoom
+  zoom.value = newZoom
+  applyViewport()
+  emitViewport()
+}
+
+function onPanStart(e: MouseEvent) {
+  if (e.button !== 0) return
+  isPanning.value = true
+  panStart = { x: e.clientX, y: e.clientY, px: posX.value, py: posY.value }
+}
+
+function onPanMove(e: MouseEvent) {
+  if (!isPanning.value) return
+  posX.value = panStart.px + e.clientX - panStart.x
+  posY.value = panStart.py + e.clientY - panStart.y
+  applyViewport()
+  emitViewport()
+}
+
+function onPanEnd() {
+  isPanning.value = false
+}
+
+function onBgColorInput(e: Event) {
+  const hex = (e.target as HTMLInputElement).value
+  bgColor.value = parseInt(hex.slice(1), 16)
+  pixiAppInst?.setBackground(bgColor.value)
+}
+
+function emitViewport() {
+  emit('viewport-change', { posX: posX.value, posY: posY.value, zoom: zoom.value })
+}
+
+// ── Public: setViewport (called by parent for sync) ────────────────────────────
+
+function setViewport(vp: { posX: number; posY: number; zoom: number }) {
+  posX.value = vp.posX
+  posY.value = vp.posY
+  zoom.value = vp.zoom
+  applyViewport()
 }
 
 // ── Control handlers ───────────────────────────────────────────────────────────
 
 function togglePlay() {
-  if (!adapter.value || !isMaster.value) return
+  if (!adapterInst || !isMaster.value) return
   isPlaying.value = !isPlaying.value
-  adapter.value.setTimeScale(isPlaying.value ? 1 : 0)
+  adapterInst.setTimeScale(isPlaying.value ? 1 : 0)
 }
 
 function onAnimChange(e: Event) {
   const name = (e.target as HTMLSelectElement).value
-  if (!adapter.value || !name) return
+  if (!adapterInst || !name) return
   currentAnimName.value = name
-  adapter.value.setAnimation(0, name, true)
+  adapterInst.setAnimation(0, name, true)
   isPlaying.value = true
 }
 
 // ── Public methods (exposed) ───────────────────────────────────────────────────
 
 function getTrackTime(): number {
-  if (!adapter.value) return 0
-  const states = adapter.value.getTrackStates()
-  return states.find(s => s.trackIndex === 0)?.time ?? 0
+  if (!adapterInst) return 0
+  return adapterInst.getTrackStates().find(s => s.trackIndex === 0)?.time ?? 0
 }
 
 function seekToTime(time: number) {
-  adapter.value?.seekTo(0, time)
+  adapterInst?.seekTo(0, time)
+}
+
+function setAnimationByName(name: string) {
+  if (!adapterInst) return
+  if (adapterInst.animations.includes(name)) {
+    currentAnimName.value = name
+    adapterInst.setAnimation(0, name, true)
+  }
 }
 
 // ── Drag-and-drop (direct file load) ──────────────────────────────────────────
@@ -272,20 +448,6 @@ async function onDrop(e: DragEvent) {
   const { error } = await compareStore.loadDirect(props.side, files)
   if (error) loadError.value = error
 }
-
-// ── Sync methods (called by CompareSplitStage) ─────────────────────────────────
-
-/** Set animation by name — called on secondary when master changes animation */
-function setAnimationByName(name: string) {
-  if (!adapter.value) return
-  const hasAnim = adapter.value.animations.includes(name)
-  if (hasAnim) {
-    currentAnimName.value = name
-    adapter.value.setAnimation(0, name, true)
-  }
-}
-
-defineExpose({ adapter, pixiApp, getTrackTime, seekTo: seekToTime, setAnimationByName, getAnimationNames: () => animationNames.value })
 </script>
 
 <style scoped>
@@ -295,14 +457,15 @@ defineExpose({ adapter, pixiApp, getTrackTime, seekTo: seekToTime, setAnimationB
   min-width: 0;
   display: flex;
   flex-direction: column;
-  background: var(--c-bg);
+  background: #111113;
   overflow: hidden;
+  cursor: grab;
+  user-select: none;
 }
 
-.canvas-slot--drag {
-  outline: 2px dashed #7c6af5;
-  outline-offset: -2px;
-}
+.canvas-slot--pan   { cursor: grabbing; }
+.canvas-slot--empty { cursor: default; }
+.canvas-slot--drag  { outline: 2px dashed #7c6af5; outline-offset: -2px; }
 
 .slot-canvas {
   flex: 1;
@@ -315,7 +478,7 @@ defineExpose({ adapter, pixiApp, getTrackTime, seekTo: seekToTime, setAnimationB
 /* ── Empty state ─────────────────────────────────────────────────── */
 .empty-state {
   position: absolute;
-  inset: 0 0 36px 0; /* above control bar */
+  inset: 0 0 36px 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -324,24 +487,11 @@ defineExpose({ adapter, pixiApp, getTrackTime, seekTo: seekToTime, setAnimationB
   pointer-events: none;
 }
 
-.empty-icon {
-  font-size: 2rem;
-  color: var(--c-text-ghost);
-  line-height: 1;
-}
+.empty-icon  { font-size: 2rem; color: rgba(255,255,255,0.12); line-height: 1; }
+.empty-label { font-size: 0.85rem; color: rgba(255,255,255,0.3); font-weight: 500; }
+.empty-hint  { font-size: 0.72rem; color: rgba(255,255,255,0.15); }
 
-.empty-label {
-  font-size: 0.85rem;
-  color: var(--c-text-muted);
-  font-weight: 500;
-}
-
-.empty-hint {
-  font-size: 0.72rem;
-  color: var(--c-text-ghost);
-}
-
-/* ── Loading / error overlay ─────────────────────────────────────── */
+/* ── Overlays ─────────────────────────────────────────────────────── */
 .loading-overlay,
 .error-overlay {
   position: absolute;
@@ -353,8 +503,69 @@ defineExpose({ adapter, pixiApp, getTrackTime, seekTo: seekToTime, setAnimationB
   pointer-events: none;
 }
 
-.loading-text { color: var(--c-text-muted); }
+.loading-text { color: rgba(255,255,255,0.4); }
 .error-text   { color: #f87171; }
+
+.overlay-tl {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: rgba(0,0,0,0.45);
+  backdrop-filter: blur(4px);
+  pointer-events: all;
+  z-index: 10;
+}
+
+.bg-input {
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  background: none;
+  flex-shrink: 0;
+  opacity: 0.75;
+  transition: opacity 0.15s;
+}
+.bg-input:hover { opacity: 1; }
+.bg-input::-webkit-color-swatch-wrapper { padding: 0; }
+.bg-input::-webkit-color-swatch { border: 1px solid rgba(255,255,255,0.2); border-radius: 3px; }
+
+.overlay-hint {
+  font-size: 0.65rem;
+  color: rgba(255,255,255,0.35);
+  user-select: none;
+  cursor: default;
+  title: 'Double-click to center';
+}
+
+.overlay-tr {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.fps-badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(0,0,0,0.45);
+  backdrop-filter: blur(4px);
+}
+
+.fps--good { color: #4ade80; }
+.fps--ok   { color: #facc15; }
+.fps--bad  { color: #f87171; }
 
 /* ── Control bar ─────────────────────────────────────────────────── */
 .control-bar {
@@ -364,15 +575,18 @@ defineExpose({ adapter, pixiApp, getTrackTime, seekTo: seekToTime, setAnimationB
   align-items: center;
   gap: 6px;
   padding: 0 8px;
-  border-top: 1px solid var(--c-border-dim);
-  background: var(--c-surface);
+  border-top: 1px solid rgba(255,255,255,0.06);
+  background: rgba(0,0,0,0.5);
+  backdrop-filter: blur(4px);
+  z-index: 5;
+  cursor: default;
 }
 
 .slot-side-badge {
   font-size: 0.7rem;
   font-weight: 700;
-  background: var(--c-raised);
-  color: var(--c-text-muted);
+  background: rgba(255,255,255,0.07);
+  color: rgba(255,255,255,0.45);
   border-radius: 4px;
   padding: 1px 6px;
   flex-shrink: 0;
@@ -382,63 +596,54 @@ defineExpose({ adapter, pixiApp, getTrackTime, seekTo: seekToTime, setAnimationB
   flex: 1;
   min-width: 0;
   font-size: 0.75rem;
-  background: var(--c-raised);
-  border: 1px solid var(--c-border-dim);
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
   border-radius: 4px;
-  color: var(--c-text-dim);
+  color: rgba(255,255,255,0.7);
   padding: 2px 6px;
   height: 24px;
   cursor: pointer;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .ctrl-btn {
   background: none;
-  border: 1px solid var(--c-border);
+  border: 1px solid rgba(255,255,255,0.15);
   border-radius: 4px;
-  color: var(--c-text-muted);
+  color: rgba(255,255,255,0.6);
   font-size: 0.75rem;
   padding: 2px 8px;
   cursor: pointer;
   height: 24px;
   flex-shrink: 0;
+  transition: border-color 0.12s, color 0.12s;
 }
-
-.ctrl-btn:hover {
-  border-color: #7c6af5;
-  color: #9d8fff;
-}
+.ctrl-btn:hover { border-color: #7c6af5; color: #9d8fff; }
 
 .sync-badge {
   font-size: 0.72rem;
-  color: var(--c-text-ghost);
   padding: 2px 6px;
   border-radius: 4px;
   border: 1px solid transparent;
   flex-shrink: 0;
+  color: rgba(255,255,255,0.3);
 }
-
-.sync-badge--on {
-  color: #4ade80;
-  border-color: rgba(74, 222, 128, 0.2);
-}
+.sync-badge--on { color: #4ade80; border-color: rgba(74, 222, 128, 0.2); }
 
 .time-display {
   font-size: 0.7rem;
-  color: var(--c-text-muted);
+  color: rgba(255,255,255,0.4);
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
 }
 
-.fps-display {
-  font-size: 0.68rem;
-  color: var(--c-text-ghost);
+.fps-inline {
+  font-size: 0.65rem;
+  color: rgba(255,255,255,0.25);
   flex-shrink: 0;
 }
 
 .empty-bar-hint {
   font-size: 0.72rem;
-  color: var(--c-text-ghost);
+  color: rgba(255,255,255,0.2);
 }
 </style>

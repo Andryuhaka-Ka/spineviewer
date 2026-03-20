@@ -37,6 +37,9 @@ export const useCompareStore = defineStore('compare', () => {
   const syncEnabled = ref<boolean>(
     (localStorage.getItem('svp:compare:syncEnabled') ?? 'true') === 'true',
   )
+  const syncViewport = ref<boolean>(
+    (localStorage.getItem('svp:compare:syncViewport') ?? 'true') === 'true',
+  )
   const masterSide = ref<'left' | 'right'>(
     (localStorage.getItem('svp:compare:masterSide') as 'left' | 'right') ?? 'left',
   )
@@ -50,6 +53,7 @@ export const useCompareStore = defineStore('compare', () => {
 
   // --- Persistence watchers ---
   watch(syncEnabled,  v => localStorage.setItem('svp:compare:syncEnabled', String(v)))
+  watch(syncViewport, v => localStorage.setItem('svp:compare:syncViewport', String(v)))
   watch(masterSide,   v => localStorage.setItem('svp:compare:masterSide', v))
   watch(diffPanelPos, v => localStorage.setItem('svp:compare:panelPos', v))
 
@@ -114,6 +118,7 @@ export const useCompareStore = defineStore('compare', () => {
     leftSlot,
     rightSlot,
     syncEnabled,
+    syncViewport,
     masterSide,
     diffPanelPos,
     diff,

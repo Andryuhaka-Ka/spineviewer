@@ -24,14 +24,24 @@
 
     <div class="toolbar-spacer" />
 
-    <!-- Sync toggle -->
+    <!-- Playback sync toggle -->
     <button
       class="toggle-btn"
       :class="{ 'toggle-btn--on': compareStore.syncEnabled }"
       @click="compareStore.syncEnabled = !compareStore.syncEnabled"
-      title="Toggle synchronized playback"
+      title="Synchronized playback (time)"
     >
-      ↺ Sync {{ compareStore.syncEnabled ? 'ON' : 'OFF' }}
+      ↺ {{ compareStore.syncEnabled ? 'Time ON' : 'Time OFF' }}
+    </button>
+
+    <!-- Viewport sync toggle -->
+    <button
+      class="toggle-btn"
+      :class="{ 'toggle-btn--on': compareStore.syncViewport }"
+      @click="compareStore.syncViewport = !compareStore.syncViewport"
+      title="Synchronized viewport (pan/zoom)"
+    >
+      ⊞ {{ compareStore.syncViewport ? 'View ON' : 'View OFF' }}
     </button>
 
     <!-- Master side -->

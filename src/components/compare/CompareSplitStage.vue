@@ -13,6 +13,7 @@
       ref="leftSlotRef"
       side="left"
       :file-set="leftFileSet"
+      @viewport-change="onLeftViewportChange"
     />
 
     <!-- Resize handle -->
@@ -29,6 +30,7 @@
       ref="rightSlotRef"
       side="right"
       :file-set="rightFileSet"
+      @viewport-change="onRightViewportChange"
     />
   </div>
 </template>
@@ -63,7 +65,27 @@ function resolveFileSet(slot: typeof compareStore.leftSlot): FileSet | null {
 const leftFileSet  = computed(() => resolveFileSet(compareStore.leftSlot))
 const rightFileSet = computed(() => resolveFileSet(compareStore.rightSlot))
 
-// ── Sync logic ─────────────────────────────────────────────────────────────────
+// ── Viewport sync ──────────────────────────────────────────────────────────────
+
+let isSyncingViewport = false
+
+type Viewport = { posX: number; posY: number; zoom: number }
+
+function onLeftViewportChange(vp: Viewport) {
+  if (!compareStore.syncViewport || isSyncingViewport) return
+  isSyncingViewport = true
+  rightSlotRef.value?.setViewport(vp)
+  isSyncingViewport = false
+}
+
+function onRightViewportChange(vp: Viewport) {
+  if (!compareStore.syncViewport || isSyncingViewport) return
+  isSyncingViewport = true
+  leftSlotRef.value?.setViewport(vp)
+  isSyncingViewport = false
+}
+
+// ── Playback sync ──────────────────────────────────────────────────────────────
 
 let syncTickerFn: (() => void) | null = null
 
