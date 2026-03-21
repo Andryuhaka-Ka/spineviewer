@@ -101,14 +101,33 @@
             </div>
             <div v-if="diffsOnly && diff.animTable.every(r => r.status === 'ok')" class="ov-empty">All animations match</div>
 
-            <!-- Events per animation (JSON only) -->
+            <!-- Global events (always visible) -->
+            <div class="ov-sub-header ov-sub-header--events">
+              <span class="ov-sub-title">Events</span>
+              <span class="ov-sub-hint">{{ diff.globalEvents.length }} total</span>
+            </div>
+            <div v-if="diff.globalEvents.length === 0" class="ov-empty">No events defined</div>
+            <template v-else>
+              <div
+                v-for="ev in visibleGlobalEvents"
+                :key="ev.name"
+                class="anim-row"
+                :class="ev.status === 'ok' ? 'anim-row--ok' : ev.status === 'only-a' ? 'anim-row--only-a' : 'anim-row--only-b'"
+              >
+                <span class="anim-row-icon">{{ ev.status === 'ok' ? '✓' : ev.status === 'only-a' ? '−' : '+' }}</span>
+                <span class="anim-row-name">{{ ev.name }}</span>
+                <span class="ev-global-status">{{ ev.status === 'ok' ? 'both' : ev.status === 'only-a' ? 'A only' : 'B only' }}</span>
+              </div>
+              <div v-if="diffsOnly && diff.globalEvents.every(e => e.status === 'ok')" class="ov-empty">All events match</div>
+            </template>
+
+            <!-- Per-animation event timing (JSON only) -->
             <template v-if="diff.animEvents.length > 0">
               <div class="ov-sub-header ov-sub-header--events">
-                <span class="ov-sub-title">Events per animation</span>
-                <span class="ov-sub-hint">{{ diff.animEvents.length }} anim with events</span>
+                <span class="ov-sub-title">Event timing per animation</span>
+                <span class="ov-sub-hint">{{ diff.animEvents.length }} anim</span>
               </div>
               <template v-for="group in visibleAnimEvents" :key="group.animName">
-                <!-- Group header -->
                 <div
                   class="ev-group-header"
                   :class="{ 'ev-group-header--changed': group.hasChanges }"
@@ -119,7 +138,6 @@
                   <span v-if="group.hasChanges" class="ev-group-badge">{{ group.events.filter(e => e.status !== 'ok').length }} changed</span>
                   <span v-else class="ev-group-ok">✓</span>
                 </div>
-                <!-- Event rows -->
                 <template v-if="evGroupExpanded.has(group.animName)">
                   <div
                     v-for="ev in visibleEventRows(group)"
@@ -139,7 +157,8 @@
                 </template>
               </template>
             </template>
-            <div v-else-if="diff.source === 'runtime-partial'" class="ov-empty">Event timing: JSON files only</div>
+            <div v-else-if="diff.source === 'json-full'" class="ov-empty ov-empty--hint">No event timelines in animations</div>
+            <div v-else class="ov-empty ov-empty--hint">Event timing: JSON files only</div>
           </template>
         </div>
 
@@ -195,7 +214,7 @@
 <script setup lang="ts">
 import CompareDiffSection from './CompareDiffSection.vue'
 import { useCompareStore } from '@/core/stores/useCompareStore'
-import type { PlaceholderDiff, AnimEventGroup } from '@/core/utils/spineCompare'
+import type { PlaceholderDiff, AnimEventGroup, GlobalEventRow } from '@/core/utils/spineCompare'
 
 const compareStore = useCompareStore()
 
@@ -226,9 +245,19 @@ const animTableIssues = computed(() =>
   diff.value?.animTable.filter(r => r.status !== 'ok').length ?? 0,
 )
 
-const animEventIssues = computed(() =>
-  diff.value?.animEvents.reduce((sum, g) => sum + g.events.filter(e => e.status !== 'ok').length, 0) ?? 0,
-)
+const animEventIssues = computed(() => {
+  if (!diff.value) return 0
+  const globalMissing = diff.value.globalEvents.filter(e => e.status !== 'ok').length
+  const timingDeltas  = diff.value.animEvents.reduce((sum, g) => sum + g.events.filter(e => e.status !== 'ok').length, 0)
+  return globalMissing + timingDeltas
+})
+
+const visibleGlobalEvents = computed<GlobalEventRow[]>(() => {
+  if (!diff.value) return []
+  return diffsOnly.value
+    ? diff.value.globalEvents.filter(e => e.status !== 'ok')
+    : diff.value.globalEvents
+})
 
 const visibleAnimTable = computed(() => {
   if (!diff.value) return []
@@ -526,6 +555,18 @@ function posBtnIcon(pos: 'left' | 'right' | 'bottom'): string {
   font-size: 0.72rem;
   color: var(--c-text-ghost);
   font-style: italic;
+}
+
+.ov-empty--hint {
+  padding: 4px 16px;
+  font-size: 0.65rem;
+}
+
+.ev-global-status {
+  flex-shrink: 0;
+  font-size: 0.62rem;
+  color: var(--c-text-ghost);
+  margin-left: auto;
 }
 
 /* Animation rows */

@@ -79,6 +79,11 @@ export interface AnimEventGroup {
   hasChanges: boolean
 }
 
+export interface GlobalEventRow {
+  name:   string
+  status: 'ok' | 'only-a' | 'only-b'
+}
+
 export interface SpineDiff {
   source: 'json-full' | 'runtime-partial'
   summary: {
@@ -87,10 +92,11 @@ export interface SpineDiff {
     changed: number
     equal: number
   }
-  animTable:  AnimTableRow[]
-  animEvents: AnimEventGroup[]   // JSON-only; empty for runtime
+  animTable:    AnimTableRow[]
+  globalEvents: GlobalEventRow[]   // available for both runtime and JSON
+  animEvents:   AnimEventGroup[]   // per-animation timing; JSON-only
   placeholders: PlaceholderDiff[]
-  sections: DiffSection[]
+  sections:     DiffSection[]
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -717,6 +723,34 @@ function extractPlaceholders(dataA: SpineData, dataB: SpineData): PlaceholderDif
 
 // ── Reskin-focused builders ────────────────────────────────────────────────────
 
+function buildGlobalEvents(dataA: SpineData, dataB: SpineData): GlobalEventRow[] {
+  let namesA: string[]
+  let namesB: string[]
+
+  if (dataA.source === 'json') {
+    namesA = Object.keys(getJsonEvents(dataA.raw as AnyRecord))
+  } else {
+    namesA = dataA.adapter.events.map(e => e.name)
+  }
+
+  if (dataB.source === 'json') {
+    namesB = Object.keys(getJsonEvents(dataB.raw as AnyRecord))
+  } else {
+    namesB = dataB.adapter.events.map(e => e.name)
+  }
+
+  const setA = new Set(namesA)
+  const setB = new Set(namesB)
+  const all  = [...new Set([...namesA, ...namesB])]
+
+  return all.map(name => {
+    if (!setA.has(name)) return { name, status: 'only-b' as const }
+    if (!setB.has(name)) return { name, status: 'only-a' as const }
+    return { name, status: 'ok' as const }
+  })
+}
+
+
 function buildAnimTable(dataA: SpineData, dataB: SpineData): AnimTableRow[] {
   const durMapA = new Map<string, number>()
   const durMapB = new Map<string, number>()
@@ -861,6 +895,7 @@ export async function compareSpines(dataA: SpineData, dataB: SpineData): Promise
 
   const placeholders = extractPlaceholders(dataA, dataB)
   const animTable    = buildAnimTable(dataA, dataB)
+  const globalEvents = buildGlobalEvents(dataA, dataB)
   const animEvents   = buildAnimEvents(dataA, dataB)
 
   // Build summary
@@ -877,6 +912,7 @@ export async function compareSpines(dataA: SpineData, dataB: SpineData): Promise
     source:       isJsonFull ? 'json-full' : 'runtime-partial',
     summary,
     animTable,
+    globalEvents,
     animEvents,
     placeholders,
     sections,
