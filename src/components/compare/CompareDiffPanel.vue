@@ -49,16 +49,6 @@
           @click="diffsOnly = true"
         >Differences only</button>
       </div>
-      <div class="panel-pos-btns">
-        <button
-          v-for="pos in (['left', 'right', 'bottom'] as const)"
-          :key="pos"
-          class="pos-btn"
-          :class="{ 'pos-btn--active': compareStore.diffPanelPos === pos }"
-          :title="`Panel ${pos}`"
-          @click="compareStore.setPanelPos(pos)"
-        >{{ posBtnIcon(pos) }}</button>
-      </div>
     </div>
 
     <!-- Diff content -->
@@ -72,16 +62,21 @@
             <span class="ov-toggle">{{ ovExpanded ? '−' : '+' }}</span>
             <span class="ov-title">🎬 Reskin Overview</span>
             <span class="ov-counts">
-              <span v-if="animTableIssues > 0" class="ov-badge ov-badge--warn">{{ animTableIssues }} anim</span>
-              <span v-if="animEventIssues > 0" class="ov-badge ov-badge--err">{{ animEventIssues }} event</span>
-              <span v-if="animTableIssues === 0 && animEventIssues === 0" class="ov-badge ov-badge--ok">ok</span>
+              <span v-if="animNameIssues > 0"    class="ov-badge ov-badge--err">{{ animNameIssues }} anim</span>
+              <span v-if="animDurIssues > 0"     class="ov-badge ov-badge--warn">{{ animDurIssues }} dur</span>
+              <span v-if="skinTableIssues > 0"   class="ov-badge ov-badge--warn">{{ skinTableIssues }} skin</span>
+              <span v-if="globalEventIssues > 0"      class="ov-badge ov-badge--err">{{ globalEventIssues }} event</span>
+              <span v-if="animEventNameIssues > 0"   class="ov-badge ov-badge--err">{{ animEventNameIssues }} ev name</span>
+              <span v-if="animEventTimingIssues > 0" class="ov-badge ov-badge--warn">{{ animEventTimingIssues }} ev time</span>
+              <span v-if="changedPlaceholders > 0" class="ov-badge ov-badge--err">{{ changedPlaceholders }} ph</span>
+              <span v-if="animNameIssues === 0 && animDurIssues === 0 && skinTableIssues === 0 && globalEventIssues === 0 && animEventNameIssues === 0 && animEventTimingIssues === 0 && changedPlaceholders === 0" class="ov-badge ov-badge--ok">ok</span>
             </span>
           </div>
 
           <template v-if="ovExpanded">
             <!-- Animation table -->
             <div class="ov-sub-header">
-              <span class="ov-sub-title">Animations</span>
+              <span class="ov-sub-title">{{ animTableIssues > 0 ? '⚠ ' : '' }}Animations</span>
               <span class="ov-sub-hint">{{ diff.animTable.length }} total</span>
             </div>
             <div
@@ -101,9 +96,29 @@
             </div>
             <div v-if="diffsOnly && diff.animTable.every(r => r.status === 'ok')" class="ov-empty">All animations match</div>
 
+            <!-- Skins -->
+            <div class="ov-sub-header">
+              <span class="ov-sub-title">{{ skinTableIssues > 0 ? '⚠ ' : '' }}Skins</span>
+              <span class="ov-sub-hint">{{ diff.skinTable.length }} total</span>
+            </div>
+            <div v-if="diff.skinTable.length === 0" class="ov-empty">No skins</div>
+            <template v-else>
+              <div
+                v-for="sk in visibleSkinTable"
+                :key="sk.name"
+                class="anim-row"
+                :class="sk.status === 'ok' ? 'anim-row--ok' : sk.status === 'only-a' ? 'anim-row--only-a' : 'anim-row--only-b'"
+              >
+                <span class="anim-row-icon">{{ sk.status === 'ok' ? '✓' : sk.status === 'only-a' ? '−' : '+' }}</span>
+                <span class="anim-row-name">{{ sk.name }}</span>
+                <span class="ev-global-status">{{ sk.status === 'ok' ? 'both' : sk.status === 'only-a' ? 'A only' : 'B only' }}</span>
+              </div>
+              <div v-if="diffsOnly && diff.skinTable.every(s => s.status === 'ok')" class="ov-empty">All skins match</div>
+            </template>
+
             <!-- Global events (always visible) -->
             <div class="ov-sub-header ov-sub-header--events">
-              <span class="ov-sub-title">Events</span>
+              <span class="ov-sub-title">{{ globalEventIssues > 0 ? '⚠ ' : '' }}Events</span>
               <span class="ov-sub-hint">{{ diff.globalEvents.length }} total</span>
             </div>
             <div v-if="diff.globalEvents.length === 0" class="ov-empty">No events defined</div>
@@ -159,44 +174,44 @@
             </template>
             <div v-else-if="diff.source === 'json-full'" class="ov-empty ov-empty--hint">No event timelines in animations</div>
             <div v-else class="ov-empty ov-empty--hint">Event timing: JSON files only</div>
-          </template>
-        </div>
 
-        <!-- Placeholders section -->
-        <div class="placeholders-section">
-          <div class="ph-header">
-            <span class="ph-toggle" @click="phExpanded = !phExpanded">{{ phExpanded ? '−' : '+' }}</span>
-            <span class="ph-title">⚠ Placeholders</span>
-            <span v-if="diff.placeholders.length > 0" class="ph-count">
-              [{{ diff.placeholders.length }} total · {{ changedPlaceholders }} changed]
-            </span>
-          </div>
-          <div v-if="phExpanded" class="ph-items">
-            <template v-if="diff.placeholders.length === 0">
-              <div class="ph-empty">No placeholder elements found</div>
+            <!-- Placeholders -->
+            <div class="ov-sub-header ov-sub-header--ph">
+              <span class="ov-sub-title">{{ changedPlaceholders > 0 ? '⚠ ' : '' }}Placeholders</span>
+              <span class="ov-sub-hint">
+                {{ diff.placeholders.length }} total
+                <template v-if="changedPlaceholders > 0"> · {{ changedPlaceholders }} changed</template>
+              </span>
+            </div>
+            <div v-if="diff.placeholders.length === 0" class="ov-empty">No placeholder elements found</div>
+            <template v-else>
+              <template v-for="ph in visiblePlaceholders" :key="`${ph.kind}::${ph.name}`">
+                <div class="ph-item" :class="`ph-item--${ph.status}`">
+                  <span class="ph-status-icon">{{ statusIcon(ph.status) }}</span>
+                  <span class="ph-kind">{{ ph.kind }}:</span>
+                  <span class="ph-name">{{ ph.name }}</span>
+                  <span class="ph-status-label">{{ ph.status.toUpperCase() }}</span>
+                </div>
+                <div
+                  v-for="param in ph.params.filter(p => p.changed || !diffsOnly)"
+                  :key="`${ph.name}::${param.key}`"
+                  class="ph-param"
+                  :class="{ 'ph-param--critical': param.critical }"
+                >
+                  <span class="ph-param-key">{{ param.key }}</span>
+                  <template v-if="param.changed">
+                    <span class="ph-param-val ph-param-val--a">{{ param.valueA }}</span>
+                    <span class="ph-param-arrow">→</span>
+                    <span class="ph-param-val ph-param-val--b">{{ param.valueB }}</span>
+                    <span v-if="param.critical" class="ph-critical-badge">⚠ critical</span>
+                  </template>
+                  <template v-else>
+                    <span class="ph-param-val ph-param-val--eq">{{ param.valueA }}</span>
+                  </template>
+                </div>
+              </template>
             </template>
-            <template v-for="ph in visiblePlaceholders" :key="`${ph.kind}::${ph.name}`">
-              <div class="ph-item" :class="`ph-item--${ph.status}`">
-                <span class="ph-status-icon">{{ statusIcon(ph.status) }}</span>
-                <span class="ph-kind">{{ ph.kind }}:</span>
-                <span class="ph-name">{{ ph.name }}</span>
-                <span class="ph-status-label">{{ ph.status.toUpperCase() }}</span>
-              </div>
-              <!-- Params -->
-              <div
-                v-for="param in ph.params.filter(p => p.changed || !diffsOnly)"
-                :key="`${ph.name}::${param.key}`"
-                class="ph-param"
-                :class="{ 'ph-param--critical': param.critical }"
-              >
-                <span class="ph-param-key">{{ param.key }}</span>
-                <span class="ph-param-val ph-param-val--a">{{ param.valueA }}</span>
-                <span class="ph-param-arrow">→</span>
-                <span class="ph-param-val ph-param-val--b">{{ param.valueB }}</span>
-                <span v-if="param.critical" class="ph-critical-badge">⚠ critical</span>
-              </div>
-            </template>
-          </div>
+          </template>
         </div>
 
         <!-- Other sections -->
@@ -214,7 +229,7 @@
 <script setup lang="ts">
 import CompareDiffSection from './CompareDiffSection.vue'
 import { useCompareStore } from '@/core/stores/useCompareStore'
-import type { PlaceholderDiff, AnimEventGroup, GlobalEventRow } from '@/core/utils/spineCompare'
+import type { PlaceholderDiff, AnimEventGroup, GlobalEventRow, SkinRow } from '@/core/utils/spineCompare'
 
 const compareStore = useCompareStore()
 
@@ -223,7 +238,6 @@ const diffStatus = computed(() => compareStore.diffStatus)
 const diffError  = computed(() => compareStore.diffError)
 
 const diffsOnly  = ref(false)
-const phExpanded = ref(true)
 const ovExpanded = ref(true)
 const evGroupExpanded = ref(new Set<string>())
 
@@ -241,15 +255,38 @@ const labelB = computed(() => {
 
 // ── Reskin overview computed ────────────────────────────────────────────────
 
-const animTableIssues = computed(() =>
-  diff.value?.animTable.filter(r => r.status !== 'ok').length ?? 0,
+const animNameIssues = computed(() =>
+  diff.value?.animTable.filter(r => r.status === 'only-a' || r.status === 'only-b').length ?? 0,
 )
 
-const animEventIssues = computed(() => {
-  if (!diff.value) return 0
-  const globalMissing = diff.value.globalEvents.filter(e => e.status !== 'ok').length
-  const timingDeltas  = diff.value.animEvents.reduce((sum, g) => sum + g.events.filter(e => e.status !== 'ok').length, 0)
-  return globalMissing + timingDeltas
+const animDurIssues = computed(() =>
+  diff.value?.animTable.filter(r => r.status === 'delta').length ?? 0,
+)
+
+const animTableIssues = computed(() => animNameIssues.value + animDurIssues.value)
+
+const skinTableIssues = computed(() =>
+  diff.value?.skinTable.filter(s => s.status !== 'ok').length ?? 0,
+)
+
+const globalEventIssues = computed(() =>
+  diff.value?.globalEvents.filter(e => e.status !== 'ok').length ?? 0,
+)
+
+const animEventNameIssues = computed(() =>
+  diff.value?.animEvents.reduce((sum, g) => sum + g.events.filter(e => e.status === 'only-a' || e.status === 'only-b').length, 0) ?? 0,
+)
+
+const animEventTimingIssues = computed(() =>
+  diff.value?.animEvents.reduce((sum, g) => sum + g.events.filter(e => e.status === 'delta').length, 0) ?? 0,
+)
+
+
+const visibleSkinTable = computed<SkinRow[]>(() => {
+  if (!diff.value) return []
+  return diffsOnly.value
+    ? diff.value.skinTable.filter(s => s.status !== 'ok')
+    : diff.value.skinTable
 })
 
 const visibleGlobalEvents = computed<GlobalEventRow[]>(() => {
@@ -313,10 +350,13 @@ const visiblePlaceholders = computed<PlaceholderDiff[]>(() => {
     : diff.value.placeholders
 })
 
+// ids moved to Reskin Overview — don't duplicate in generic sections
+const OVERVIEW_SECTION_IDS = new Set(['animations', 'events', 'skins'])
+
 const filteredSections = computed(() => {
   if (!diff.value) return []
-  // Skip skeleton meta (id='skeleton') in 'diffs only' mode if equal
   return diff.value.sections.filter(s => {
+    if (OVERVIEW_SECTION_IDS.has(s.id)) return false
     if (diffsOnly.value && s.status === 'equal') return false
     return true
   })
@@ -327,17 +367,10 @@ function statusIcon(status: PlaceholderDiff['status']): string {
     case 'added':   return '+'
     case 'removed': return '−'
     case 'changed': return '~'
-    default:        return '='
+    default:        return '✓'
   }
 }
 
-function posBtnIcon(pos: 'left' | 'right' | 'bottom'): string {
-  switch (pos) {
-    case 'left':   return '◧'
-    case 'right':  return '◨'
-    case 'bottom': return '⬓'
-  }
-}
 </script>
 
 <style scoped>
@@ -455,24 +488,6 @@ function posBtnIcon(pos: 'left' | 'right' | 'bottom'): string {
   color: white;
 }
 
-.panel-pos-btns {
-  display: flex;
-  gap: 2px;
-}
-
-.pos-btn {
-  background: transparent;
-  border: 1px solid var(--c-border-dim);
-  border-radius: 4px;
-  padding: 2px 7px;
-  font-size: 0.75rem;
-  color: var(--c-text-ghost);
-  cursor: pointer;
-  transition: border-color 0.12s, color 0.12s;
-}
-
-.pos-btn:hover   { border-color: var(--c-text-ghost); color: var(--c-text-muted); }
-.pos-btn--active { border-color: #7c6af5; color: #9d8fff; }
 
 /* ── Diff content ─────────────────────────────────────────────────── */
 .diff-content {
@@ -535,6 +550,7 @@ function posBtnIcon(pos: 'left' | 'right' | 'bottom'): string {
 }
 
 .ov-sub-header--events { margin-top: 2px; }
+.ov-sub-header--ph     { margin-top: 2px; }
 
 .ov-sub-title {
   font-size: 0.68rem;
@@ -734,58 +750,14 @@ function posBtnIcon(pos: 'left' | 'right' | 'bottom'): string {
   text-align: right;
 }
 
-/* ── Placeholders section ─────────────────────────────────────────── */
-.placeholders-section {
-  border-bottom: 1px solid var(--c-border-dim);
-}
-
-.ph-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  cursor: pointer;
-  user-select: none;
-}
-
-.ph-header:hover { background: var(--c-raised); }
-
-.ph-toggle {
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: var(--c-text-ghost);
-  min-width: 14px;
-  text-align: center;
-}
-
-.ph-title {
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: #f59e0b;
-}
-
-.ph-count {
-  font-size: 0.7rem;
-  color: var(--c-text-muted);
-  margin-left: auto;
-}
-
-.ph-empty {
-  padding: 8px 28px;
-  font-size: 0.75rem;
-  color: var(--c-text-ghost);
-  font-style: italic;
-}
-
-.ph-items {
-  padding-bottom: 4px;
-}
+/* ── Placeholders (inside Overview) ──────────────────────────────── */
+.ov-sub-title.ph-title { color: #f59e0b; }
 
 .ph-item {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 2px 12px 2px 28px;
+  padding: 2px 10px;
   font-size: 0.75rem;
   font-family: 'JetBrains Mono', 'Fira Mono', monospace;
 }
@@ -803,7 +775,7 @@ function posBtnIcon(pos: 'left' | 'right' | 'bottom'): string {
 .ph-item--added   .ph-status-icon { color: #4ade80; }
 .ph-item--removed .ph-status-icon { color: #f87171; }
 .ph-item--changed .ph-status-icon { color: #f59e0b; }
-.ph-item--equal   .ph-status-icon { color: var(--c-text-ghost); }
+.ph-item--equal   .ph-status-icon { color: #4ade80; }
 
 .ph-kind { color: var(--c-text-ghost); font-size: 0.72rem; }
 .ph-name { color: var(--c-text-dim); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -819,7 +791,7 @@ function posBtnIcon(pos: 'left' | 'right' | 'bottom'): string {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 1px 12px 1px 44px;
+  padding: 1px 10px 1px 26px;
   font-size: 0.72rem;
   font-family: 'JetBrains Mono', 'Fira Mono', monospace;
 }
@@ -827,8 +799,9 @@ function posBtnIcon(pos: 'left' | 'right' | 'bottom'): string {
 .ph-param--critical { background: rgba(245, 158, 11, 0.07); }
 
 .ph-param-key    { color: var(--c-text-ghost); min-width: 80px; }
-.ph-param-val    { font-size: 0.72rem; max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ph-param-val--a { color: #f87171; }
+.ph-param-val    { font-size: 0.72rem; white-space: nowrap; }
+.ph-param-val--a  { color: #f87171; }
+.ph-param-val--eq { color: var(--c-text-muted); }
 .ph-param-val--b { color: #4ade80; }
 .ph-param-arrow  { color: var(--c-text-ghost); flex-shrink: 0; }
 .ph-critical-badge {

@@ -15,6 +15,8 @@
       :file-set="leftFileSet"
       @viewport-change="onLeftViewportChange"
       @anim-change="onLeftAnimChange"
+      @skin-change="onLeftSkinChange"
+      @loaded="onSlotLoaded"
     />
 
     <!-- Resize handle -->
@@ -33,6 +35,8 @@
       :file-set="rightFileSet"
       @viewport-change="onRightViewportChange"
       @anim-change="onRightAnimChange"
+      @skin-change="onRightSkinChange"
+      @loaded="onSlotLoaded"
     />
   </div>
 </template>
@@ -97,6 +101,16 @@ function onLeftAnimChange(name: string) {
 function onRightAnimChange(name: string) {
   if (!compareStore.syncEnabled) return
   leftSlotRef.value?.setAnimationByName(name)
+}
+
+function onLeftSkinChange(name: string) {
+  if (!compareStore.syncEnabled) return
+  rightSlotRef.value?.setSkinByName(name)
+}
+
+function onRightSkinChange(name: string) {
+  if (!compareStore.syncEnabled) return
+  leftSlotRef.value?.setSkinByName(name)
 }
 
 // ── Playback sync ──────────────────────────────────────────────────────────────
@@ -186,6 +200,12 @@ async function runDiff() {
   } catch (e) {
     compareStore.setDiffStatus('error', e instanceof Error ? e.message : 'Comparison failed')
   }
+}
+
+// ── Auto-diff on load ───────────────────────────────────────────────────────────
+
+function onSlotLoaded() {
+  runDiff()
 }
 
 defineExpose({ runDiff })

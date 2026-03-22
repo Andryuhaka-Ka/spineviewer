@@ -84,6 +84,11 @@ export interface GlobalEventRow {
   status: 'ok' | 'only-a' | 'only-b'
 }
 
+export interface SkinRow {
+  name:   string
+  status: 'ok' | 'only-a' | 'only-b'
+}
+
 export interface SpineDiff {
   source: 'json-full' | 'runtime-partial'
   summary: {
@@ -93,6 +98,7 @@ export interface SpineDiff {
     equal: number
   }
   animTable:    AnimTableRow[]
+  skinTable:    SkinRow[]
   globalEvents: GlobalEventRow[]   // available for both runtime and JSON
   animEvents:   AnimEventGroup[]   // per-animation timing; JSON-only
   placeholders: PlaceholderDiff[]
@@ -723,6 +729,25 @@ function extractPlaceholders(dataA: SpineData, dataB: SpineData): PlaceholderDif
 
 // ── Reskin-focused builders ────────────────────────────────────────────────────
 
+function buildSkinTable(dataA: SpineData, dataB: SpineData): SkinRow[] {
+  const namesA = dataA.source === 'json'
+    ? getJsonSkins(dataA.raw as AnyRecord).map(s => s.name as string)
+    : dataA.adapter.skins
+  const namesB = dataB.source === 'json'
+    ? getJsonSkins(dataB.raw as AnyRecord).map(s => s.name as string)
+    : dataB.adapter.skins
+
+  const setA = new Set(namesA)
+  const setB = new Set(namesB)
+  const all  = [...new Set([...namesA, ...namesB])]
+
+  return all.map(name => {
+    if (!setA.has(name)) return { name, status: 'only-b' as const }
+    if (!setB.has(name)) return { name, status: 'only-a' as const }
+    return { name, status: 'ok' as const }
+  })
+}
+
 function buildGlobalEvents(dataA: SpineData, dataB: SpineData): GlobalEventRow[] {
   let namesA: string[]
   let namesB: string[]
@@ -895,6 +920,7 @@ export async function compareSpines(dataA: SpineData, dataB: SpineData): Promise
 
   const placeholders = extractPlaceholders(dataA, dataB)
   const animTable    = buildAnimTable(dataA, dataB)
+  const skinTable    = buildSkinTable(dataA, dataB)
   const globalEvents = buildGlobalEvents(dataA, dataB)
   const animEvents   = buildAnimEvents(dataA, dataB)
 
@@ -912,6 +938,7 @@ export async function compareSpines(dataA: SpineData, dataB: SpineData): Promise
     source:       isJsonFull ? 'json-full' : 'runtime-partial',
     summary,
     animTable,
+    skinTable,
     globalEvents,
     animEvents,
     placeholders,

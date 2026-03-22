@@ -74,6 +74,9 @@
       <span class="slot-side-badge">{{ side === 'left' ? 'A' : 'B' }}</span>
 
       <template v-if="adapter">
+        <select v-if="skinNames.length > 1" class="anim-select skin-select" :value="currentSkinName ?? ''" @change="onSkinChange">
+          <option v-for="name in skinNames" :key="name" :value="name">{{ name }}</option>
+        </select>
         <select class="anim-select" :value="currentAnimName ?? ''" @change="onAnimChange">
           <option v-if="!currentAnimName" value="" disabled>— select —</option>
           <option v-for="name in animationNames" :key="name" :value="name">{{ name }}</option>
@@ -120,6 +123,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   'viewport-change': [vp: { posX: number; posY: number; zoom: number }]
   'anim-change':     [name: string]
+  'skin-change':     [name: string]
+  'loaded':          []
 }>()
 
 // ── DOM refs ───────────────────────────────────────────────────────────────────
@@ -152,6 +157,10 @@ const posX  = ref(0)
 const posY  = ref(0)
 const zoom  = ref(1)
 const bgColor = ref(0x111113)
+
+// Skin controls
+const currentSkinName = ref<string | null>(null)
+const skinNames       = computed(() => adapter.value?.skins ?? [])
 
 // Animation controls
 const currentAnimName = ref<string | null>(null)
@@ -206,6 +215,7 @@ defineExpose({
   getTrackTime,
   seekTo:             seekToTime,
   setAnimationByName,
+  setSkinByName,
   setViewport,
   getAnimationNames:  () => animationNames.value,
 })
@@ -312,6 +322,15 @@ async function loadFileSet(fileSet: FileSet) {
     baseY.value = height * 0.5
     resetView()
 
+    // Auto-select first non-default skin
+    const firstSkin = newAdapter.skins.find(s => s !== 'default') ?? newAdapter.skins[0] ?? null
+    if (firstSkin && firstSkin !== 'default') {
+      newAdapter.setSkin(firstSkin)
+      currentSkinName.value = firstSkin
+    } else {
+      currentSkinName.value = newAdapter.skins[0] ?? null
+    }
+
     // Start first animation
     const anims = newAdapter.animations
     if (anims.length > 0) {
@@ -319,6 +338,8 @@ async function loadFileSet(fileSet: FileSet) {
       newAdapter.setAnimation(0, anims[0], true)
       isPlaying.value = true
     }
+
+    emit('loaded')
   } catch (e) {
     loadError.value = e instanceof Error ? e.message : 'Failed to load spine'
   } finally {
@@ -332,6 +353,7 @@ function destroyAdapter() {
   adapterInst   = null
   adapter.value = null
   spineObj      = null
+  currentSkinName.value = null
   currentAnimName.value = null
   isPlaying.value       = false
   currentTime.value     = 0
@@ -436,6 +458,22 @@ function onAnimChange(e: Event) {
   adapterInst.setAnimation(0, name, true)
   isPlaying.value = true
   emit('anim-change', name)
+}
+
+function onSkinChange(e: Event) {
+  const name = (e.target as HTMLSelectElement).value
+  if (!adapterInst || !name) return
+  currentSkinName.value = name
+  adapterInst.setSkin(name)
+  emit('skin-change', name)
+}
+
+function setSkinByName(name: string) {
+  if (!adapterInst) return
+  if (adapterInst.skins.includes(name)) {
+    currentSkinName.value = name
+    adapterInst.setSkin(name)
+  }
 }
 
 // ── Public methods (exposed) ───────────────────────────────────────────────────
@@ -629,6 +667,13 @@ async function onDrop(e: DragEvent) {
 .anim-select option {
   background: #1e1e24;
   color: #d4d4d8;
+}
+
+.skin-select {
+  flex: 0 0 auto;
+  max-width: 110px;
+  border-color: rgba(124,106,245,0.3);
+  color: #c4b5fd;
 }
 
 .ctrl-btn {

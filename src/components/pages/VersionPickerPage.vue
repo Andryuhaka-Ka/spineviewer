@@ -280,6 +280,8 @@ function onOpenCompare() {
   const validSlots = loaderStore.spineSlots.map((s, i) => ({ s, i })).filter(({ s }) => !s.error)
   if (validSlots.length >= 2) {
     emit('open-compare', { left: validSlots[0].i, right: validSlots[1].i })
+  } else if (validSlots.length === 1) {
+    emit('open-compare', { left: validSlots[0].i })
   } else {
     emit('open-compare', {})
   }

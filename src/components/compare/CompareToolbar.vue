@@ -59,21 +59,6 @@
       >B</button>
     </div>
 
-    <!-- Run diff button -->
-    <button
-      class="run-diff-btn"
-      :class="{
-        'run-diff-btn--running': compareStore.diffStatus === 'running',
-        'run-diff-btn--done':    compareStore.diffStatus === 'done',
-      }"
-      :disabled="compareStore.diffStatus === 'running' || !canRunDiff"
-      @click="emit('run-diff')"
-      title="Run structural comparison"
-    >
-      <span v-if="compareStore.diffStatus === 'running'">⏳ Running…</span>
-      <span v-else>⚡ Run Diff</span>
-    </button>
-
     <!-- Settings -->
     <SettingsPopover />
 
@@ -96,13 +81,10 @@ import SettingsPopover from '@/components/ui/SettingsPopover.vue'
 import { useCompareStore } from '@/core/stores/useCompareStore'
 
 const emit = defineEmits<{
-  back:     []
-  'run-diff': []
+  back: []
 }>()
 
 const compareStore = useCompareStore()
-
-const canRunDiff = computed(() => compareStore.leftSlot !== null && compareStore.rightSlot !== null)
 
 function posBtnIcon(pos: 'left' | 'right' | 'bottom'): string {
   switch (pos) {
@@ -203,41 +185,6 @@ function posBtnIcon(pos: 'left' | 'right' | 'bottom'): string {
 
 .master-btn:hover    { border-color: var(--c-text-ghost); }
 .master-btn--active  { background: #7c6af5; border-color: #7c6af5; color: white; }
-
-/* ── Run diff ─────────────────────────────────────────────────────── */
-.run-diff-btn {
-  background: rgba(124, 106, 245, 0.1);
-  border: 1px solid #7c6af5;
-  border-radius: 6px;
-  padding: 4px 12px;
-  font-size: 0.75rem;
-  color: #9d8fff;
-  cursor: pointer;
-  transition: background 0.12s, border-color 0.12s;
-  flex-shrink: 0;
-  white-space: nowrap;
-}
-
-.run-diff-btn:hover:not(:disabled) {
-  background: rgba(124, 106, 245, 0.2);
-}
-
-.run-diff-btn:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.run-diff-btn--running {
-  border-color: #f59e0b;
-  color: #f59e0b;
-  background: rgba(245, 158, 11, 0.08);
-}
-
-.run-diff-btn--done {
-  border-color: #4ade80;
-  color: #4ade80;
-  background: rgba(74, 222, 128, 0.08);
-}
 
 /* ── Panel position ───────────────────────────────────────────────── */
 .panel-pos-group {

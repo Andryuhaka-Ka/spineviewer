@@ -10,8 +10,7 @@
   <div class="compare-page">
     <!-- Toolbar -->
     <CompareToolbar
-      @back="emit('back')"
-      @run-diff="splitStageRef?.runDiff()"
+      @back="onClickBack"
     />
 
     <!-- Main content area — layout depends on panel position -->
@@ -49,6 +48,9 @@ import CompareSplitStage from './CompareSplitStage.vue'
 import CompareDiffPanel  from './CompareDiffPanel.vue'
 import { useCompareStore } from '@/core/stores/useCompareStore'
 import { useLoaderStore } from '@/core/stores/useLoaderStore'
+import { useSkeletonStore } from '@/core/stores/useSkeletonStore'
+import { useAnimationStore } from '@/core/stores/useAnimationStore'
+import { useExportStore } from '@/core/stores/useExportStore'
 
 // ── Props ──────────────────────────────────────────────────────────────────────
 
@@ -61,8 +63,11 @@ const emit = defineEmits<{ back: [] }>()
 
 // ── Stores ─────────────────────────────────────────────────────────────────────
 
-const compareStore = useCompareStore()
-const loaderStore  = useLoaderStore()
+const compareStore   = useCompareStore()
+const loaderStore    = useLoaderStore()
+const skeletonStore  = useSkeletonStore()
+const animationStore = useAnimationStore()
+const exportStore    = useExportStore()
 
 // ── Refs ───────────────────────────────────────────────────────────────────────
 
@@ -133,6 +138,18 @@ function onPanelResizeStart(e: MouseEvent) {
   window.addEventListener('mouseup', onUp)
 }
 
+// ── Back ───────────────────────────────────────────────────────────────────────
+
+function onClickBack() {
+  if (!window.confirm('Reset and return to version picker?')) return
+  compareStore.reset()
+  skeletonStore.clear()
+  animationStore.reset()
+  loaderStore.clear()
+  exportStore.finish()
+  emit('back')
+}
+
 // ── Initialize slots from props ────────────────────────────────────────────────
 
 onMounted(() => {
@@ -150,11 +167,6 @@ onMounted(() => {
   }
 })
 
-// ── Cleanup on leave ───────────────────────────────────────────────────────────
-
-onUnmounted(() => {
-  // Don't reset store — preserve selections if user returns
-})
 </script>
 
 <style scoped>
