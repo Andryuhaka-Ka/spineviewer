@@ -133,4 +133,10 @@ export interface ISpineAdapter {
 
   // Returns AABB of the slot's attachment in Spine world space (Y-up), or null if unavailable
   getSlotBounds(slotName: string): SlotBounds | null
+
+  // Placeholder labels rendered as PIXI.Text children inside the Spine scene
+  setPlaceholderLabels(items: Array<{ name: string; kind: 'bone' | 'slot' | 'attachment' }>): void
+  clearPlaceholderLabels(): void
+  /** Called each ticker frame to sync text positions with animated bones */
+  tickPlaceholderLabels(): void
 }

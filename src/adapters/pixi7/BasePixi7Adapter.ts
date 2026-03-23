@@ -40,6 +40,16 @@ export abstract class BasePixi7Adapter implements ISpineAdapter {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private _container: any = null
   private _eventUnsubscribers: Array<() => void> = []
+  private _phLabels: Array<{
+    text: PIXI.Text
+    kind: 'bone' | 'slot'
+    name: string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    parent: any          // current direct parent of text (changes when re-parented in tick)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    slotRoot: any | null // slotContainers[idx] — root of the slot hierarchy for re-parenting
+    needsTick: boolean
+  }> = []
 
   // ── Load ────────────────────────────────────────────────────────────────────
 
@@ -118,6 +128,7 @@ export abstract class BasePixi7Adapter implements ISpineAdapter {
   destroy(): void {
     this._eventUnsubscribers.forEach(fn => fn())
     this._eventUnsubscribers = []
+    this.clearPlaceholderLabels()
     if (this._container && this._spine) {
       this._container.removeChild(this._spine)
     }
@@ -387,6 +398,92 @@ export abstract class BasePixi7Adapter implements ISpineAdapter {
     return vertsToAABB(verts, count)
   }
 
+  // ── Placeholder labels ───────────────────────────────────────────────────────
+
+  setPlaceholderLabels(items: Array<{ name: string; kind: 'bone' | 'slot' | 'attachment' }>): void {
+    this.clearPlaceholderLabels()
+    if (!this._spine) return
+    const style = new PIXI.TextStyle({
+      fontSize: 11,
+      fill: 0xfbbf24,
+      stroke: '#000000',
+      strokeThickness: 3,
+      fontFamily: 'monospace',
+    })
+    // If a slot and a bone share the same name, prefer slot (it has its own container)
+    const slotNames = new Set(items.filter(i => i.kind === 'slot').map(i => i.name))
+    for (const item of items) {
+      if (item.kind === 'attachment') continue
+      if (item.kind === 'bone' && slotNames.has(item.name)) continue
+      const text = new PIXI.Text(item.name, style)
+      text.anchor.set(0.5, 0.5)
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let parent: any = this._spine
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let slotRoot: any | null = null
+      let needsTick = true
+
+      if (item.kind === 'slot') {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const slotIdx = (this._spine.skeleton.slots as any[]).findIndex((s: any) => s.data.name === item.name)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const slotCont = (this._spine.slotContainers as any[])?.[slotIdx]
+        if (slotCont) {
+          slotRoot = slotCont
+          // Best-effort initial target; tick will re-parent once @pixi-spine populates children
+          parent = findDeepestTarget(slotCont)
+          needsTick = false
+          text.position.set(0, 0)
+        }
+      }
+
+      parent.addChild(text)
+      this._phLabels.push({ text, kind: item.kind, name: item.name, parent, slotRoot, needsTick })
+    }
+    this.tickPlaceholderLabels()
+  }
+
+  clearPlaceholderLabels(): void {
+    for (const entry of this._phLabels) {
+      // Use text.parent for removal — handles the case where we re-parented in tick
+      entry.text.parent?.removeChild(entry.text)
+      entry.text.destroy()
+    }
+    this._phLabels = []
+  }
+
+  tickPlaceholderLabels(): void {
+    if (!this._spine || !this._phLabels.length) return
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const skeleton = this._spine.skeleton as any
+    for (const entry of this._phLabels) {
+      if (entry.needsTick) {
+        // Bone-based: manually update position each frame
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const bone: any = entry.kind === 'bone'
+          ? skeleton.findBone(entry.name)
+          : skeleton.findSlot(entry.name)?.bone
+        if (bone) {
+          entry.text.x = bone.worldX ?? 0
+          entry.text.y = bone.worldY ?? 0
+        }
+      } else if (entry.slotRoot) {
+        // Slot-based: re-parent to deepest visible child if hierarchy changed.
+        // @pixi-spine populates slotContainers AFTER we call setPlaceholderLabels,
+        // so the initial parent may be the slot root itself. Re-parent each tick
+        // until we reach the true deepest node.
+        const deepest = findDeepestTarget(entry.slotRoot)
+        if (deepest !== entry.parent) {
+          entry.parent.removeChild(entry.text)
+          entry.parent = deepest
+          entry.text.position.set(0, 0)
+          deepest.addChild(entry.text)
+        }
+      }
+    }
+  }
+
   onEvent(cb: (e: SpineEvent) => void): () => void {
     if (!this._spine) return () => {}
     const listener = {
@@ -407,6 +504,22 @@ export abstract class BasePixi7Adapter implements ISpineAdapter {
     this._eventUnsubscribers.push(unsub)
     return unsub
   }
+}
+
+/**
+ * Traverse the display tree from `node` and return the deepest child
+ * that has no further Container/Sprite children (leaf node).
+ * Skips PIXI.Text instances so already-added labels are not traversed into.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function findDeepestTarget(node: any): any {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const eligible: any[] = (node.children ?? []).filter(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (c: any) => Array.isArray(c.children) && !(c instanceof PIXI.Text) && c.visible !== false,
+  )
+  if (eligible.length === 0) return node
+  return findDeepestTarget(eligible[0])
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

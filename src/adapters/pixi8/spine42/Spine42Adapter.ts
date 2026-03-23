@@ -37,6 +37,18 @@ export default class Spine42Adapter implements ISpineAdapter {
   private _skeletonData: any = null
   private _container: PIXI.Container | null = null
   private _eventUnsubscribers: Array<() => void> = []
+  private _phLabels: Array<{
+    text: PIXI.Text
+    kind: 'bone' | 'slot'
+    name: string
+    // For slot-based labels: the wrapper Container registered via addSlotObject
+    slotWrapper: PIXI.Container | null
+    // Current direct parent of text (updated in tick when re-parenting)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    parent: any
+    // For bone-based labels: need manual tick update
+    needsTick: boolean
+  }> = []
 
   // ── Load ───────────────────────────────────────────────────────────────────
 
@@ -130,6 +142,7 @@ export default class Spine42Adapter implements ISpineAdapter {
   destroy(): void {
     this._eventUnsubscribers.forEach(fn => fn())
     this._eventUnsubscribers = []
+    this.clearPlaceholderLabels()
     if (this._container && this._spine) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       this._container.removeChild(this._spine as any)
@@ -357,6 +370,104 @@ export default class Spine42Adapter implements ISpineAdapter {
     return isFinite(minX) ? { minX, minY, maxX, maxY } : null
   }
 
+  // ── Placeholder labels ─────────────────────────────────────────────────────
+
+  setPlaceholderLabels(items: Array<{ name: string; kind: 'bone' | 'slot' | 'attachment' }>): void {
+    this.clearPlaceholderLabels()
+    if (!this._spine) return
+    const style = new PIXI.TextStyle({
+      fontSize: 11,
+      fill: '#fbbf24',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      stroke: { color: '#000000', width: 3 } as any,
+      fontFamily: 'monospace',
+    })
+    // If a slot and a bone share the same name, prefer slot (it has its own container)
+    const slotNames = new Set(items.filter(i => i.kind === 'slot').map(i => i.name))
+    for (const item of items) {
+      if (item.kind === 'attachment') continue
+      if (item.kind === 'bone' && slotNames.has(item.name)) continue
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const text = new (PIXI.Text as any)({ text: item.name, style }) as PIXI.Text
+      text.anchor.set(0.5, 0.5)
+
+      let slotWrapper: PIXI.Container | null = null
+      let needsTick = true
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let parent: any = null
+
+      if (item.kind === 'slot') {
+        const slot = this._spine.skeleton.findSlot(item.name)
+        if (slot) {
+          // spine-pixi-v8 official API: attach a Container to a slot; it auto-follows bone transform
+          // followAttachmentTimeline:false → always visible regardless of active attachment
+          const wrapper = new PIXI.Container()
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ;(this._spine as any).addSlotObject(slot, wrapper, { followAttachmentTimeline: false })
+          // Start at wrapper; tickPlaceholderLabels will re-parent deeper once children appear
+          parent = wrapper
+          text.position.set(0, 0)
+          wrapper.addChild(text as unknown as PIXI.Container)
+          slotWrapper = wrapper
+          needsTick = false
+        }
+      }
+
+      if (needsTick) {
+        // Bone or slot fallback: add to _spine, update position in tick
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ;(this._spine as any).addChild(text)
+        parent = this._spine
+      }
+
+      this._phLabels.push({ text, kind: item.kind, name: item.name, slotWrapper, parent, needsTick })
+    }
+    this.tickPlaceholderLabels()
+  }
+
+  clearPlaceholderLabels(): void {
+    for (const entry of this._phLabels) {
+      if (entry.slotWrapper) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ;(this._spine as any)?.removeSlotObject(entry.slotWrapper)
+        entry.slotWrapper.destroy({ children: true })
+      } else {
+        // Use text.parent for removal — handles the case where we re-parented in tick
+        entry.text.parent?.removeChild(entry.text)
+        entry.text.destroy()
+      }
+    }
+    this._phLabels = []
+  }
+
+  tickPlaceholderLabels(): void {
+    if (!this._spine || !this._phLabels.length) return
+    const skeleton = this._spine.skeleton
+    for (const entry of this._phLabels) {
+      if (entry.needsTick) {
+        // Bone-based: manually update position each frame
+        const bone = entry.kind === 'bone'
+          ? skeleton.findBone(entry.name)
+          : skeleton.findSlot(entry.name)?.bone ?? null
+        if (bone) {
+          entry.text.x = bone.worldX
+          entry.text.y = bone.worldY
+        }
+      } else if (entry.slotWrapper) {
+        // Slot-based: re-parent text to deepest visible child in the wrapper hierarchy.
+        // In games, game objects may be added to the wrapper after spine is loaded.
+        const deepest = findDeepestTarget(entry.slotWrapper)
+        if (deepest !== entry.parent) {
+          entry.parent?.removeChild(entry.text)
+          entry.parent = deepest
+          entry.text.position.set(0, 0)
+          deepest.addChild(entry.text)
+        }
+      }
+    }
+  }
+
   onEvent(cb: (e: SpineEvent) => void): () => void {
     if (!this._spine) return () => {}
     const listener: AnimationStateListener = {
@@ -379,6 +490,22 @@ export default class Spine42Adapter implements ISpineAdapter {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
+
+/**
+ * Traverse the display tree from `node` and return the deepest child
+ * that has no further Container/Sprite children (leaf node).
+ * Skips PIXI.Text instances so already-added labels are not traversed into.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function findDeepestTarget(node: any): any {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const eligible: any[] = (node.children ?? []).filter(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (c: any) => Array.isArray(c.children) && !(c instanceof PIXI.Text) && c.visible !== false,
+  )
+  if (eligible.length === 0) return node
+  return findDeepestTarget(eligible[0])
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function spine42MeshVertexCount(att: any): number | undefined {

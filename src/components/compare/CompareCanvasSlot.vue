@@ -275,6 +275,7 @@ onMounted(async () => {
           animDuration.value = t0.duration
         }
         updateHighlight()
+        adapterInst.tickPlaceholderLabels()
       }
     }
     pixiAppInst.ticker.add(tickerFn)
@@ -371,6 +372,20 @@ async function loadFileSet(fileSet: FileSet) {
   }
 }
 
+// Watch diff to sync placeholder labels with Pixi scene.
+// Also called manually after loadFileSet in case diff didn't change (same diff, new adapter).
+function syncPlaceholderLabels() {
+  if (!adapterInst) return
+  const diff = compareStore.diff
+  if (diff?.placeholders?.length) {
+    adapterInst.setPlaceholderLabels(diff.placeholders)
+  } else {
+    adapterInst.clearPlaceholderLabels()
+  }
+}
+
+watch(() => compareStore.diff, syncPlaceholderLabels)
+
 function updateHighlight() {
   const hl = compareStore.selectedHighlight
   if (!hl || !adapterInst) {
@@ -413,6 +428,7 @@ watch(() => compareStore.selectedHighlight, (hl) => {
 
 function destroyAdapter() {
   if (!adapterInst) return
+  adapterInst.clearPlaceholderLabels()
   adapterInst.destroy()
   adapterInst   = null
   adapter.value = null
@@ -847,4 +863,6 @@ async function onDrop(e: DragEvent) {
   background: rgba(96, 165, 250, 0.06);
   z-index: 15;
 }
+
+
 </style>
