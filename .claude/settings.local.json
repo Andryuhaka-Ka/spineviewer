@@ -20,7 +20,23 @@
       "Bash(grep \"\"version\"\":*)",
       "Bash(sed:*)",
       "Bash(node -e \"console.log\\(require\\(''./node_modules/vite/package.json''\\).version\\)\")",
-      "Bash(node -e \":*)"
+      "Bash(node -e \":*)",
+      "Read(//mnt/d/tools/spine_viewer/spine_viewer_pro/example/**)",
+      "Bash(cmd /c \"type D:\\\\tools\\\\spine_viewer\\\\spine_viewer_pro\\\\example\\\\symbols\\\\symbols.atlas\")",
+      "Bash(cmd /c \"powershell -Command \\\\\"$j = Get-Content 'D:\\\\tools\\\\spine_viewer\\\\spine_viewer_pro\\\\example\\\\symbols\\\\symbols.json' -Raw | ConvertFrom-Json; $j.skeleton\\\\\"\" 2>&1)",
+      "Bash(cmd /c \"powershell -Command \\\\\"\\(Get-Content 'D:\\\\\\\\tools\\\\\\\\spine_viewer\\\\\\\\spine_viewer_pro\\\\\\\\example\\\\\\\\symbols\\\\\\\\symbols.json' -Raw | ConvertFrom-Json\\).skeleton\\\\\"\" 2>&1)",
+      "Bash(cmd /c \"dir C:\\\\Users\\\\akarpus\\\\.claude\")",
+      "Bash(cmd /c dir \"C:\\\\Users\\\\akarpus\\\\.claude\")",
+      "Bash(claude mcp:*)",
+      "Bash(cmd /c \"where claude 2>&1 & dir %APPDATA%\\\\npm\\\\claude* 2>&1 & dir %LOCALAPPDATA%\\\\Programs\\\\claude* 2>&1\")",
+      "Bash(cmd /c \"dir %APPDATA%\\\\npm\\\\claude* 2>&1\")",
+      "Read(//c/Users/akarpus/.claude/**)",
+      "Bash(uvx --version)",
+      "Bash(uvx --from git+https://github.com/oraios/serena serena-mcp-server --help)",
+      "mcp__plugin_serena_serena__onboarding",
+      "mcp__plugin_serena_serena__activate_project",
+      "mcp__plugin_serena_serena__check_onboarding_performed",
+      "mcp__plugin_serena_serena__initial_instructions"
     ]
   }
 }

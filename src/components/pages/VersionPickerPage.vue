@@ -75,13 +75,20 @@
         @dragleave.prevent="isDragging = false"
         @drop.prevent="onDrop"
       >
-        <template v-if="loaderStore.isLoaded">
-          <span class="drop-state-icon">✓</span>
-          <p class="drop-text-ok">
-            {{ loaderStore.spineSlots.filter(s => !s.error).length }}
-            spine{{ loaderStore.spineSlots.filter(s => !s.error).length !== 1 ? 's' : '' }} ready
-            <template v-if="loaderStore.spineSlots.some(s => s.error)">
-              &middot; {{ loaderStore.spineSlots.filter(s => s.error).length }} error{{ loaderStore.spineSlots.filter(s => s.error).length !== 1 ? 's' : '' }}
+        <template v-if="loaderStore.spineSlots.length > 0 && (loaderStore.isLoaded || loaderStore.spineSlots.some(s => s.error || s.validationErrors?.length))">
+          <span class="drop-state-icon" :class="{ 'drop-state-icon--warn': loaderStore.spineSlots.some(s => s.error || s.validationErrors?.length) }">
+            {{ loaderStore.validSlots.length > 0 ? '✓' : '!' }}
+          </span>
+          <p class="drop-text-ok" :class="{ 'drop-text-warn': loaderStore.validSlots.length === 0 }">
+            <template v-if="loaderStore.validSlots.length > 0">
+              {{ loaderStore.validSlots.length }}
+              spine{{ loaderStore.validSlots.length !== 1 ? 's' : '' }} ready
+            </template>
+            <template v-else>No valid spines</template>
+            <template v-if="loaderStore.spineSlots.some(s => s.error || s.validationErrors?.length)">
+              &middot;
+              {{ loaderStore.spineSlots.filter(s => s.error || s.validationErrors?.length).length }}
+              invalid
             </template>
           </p>
           <p class="drop-hint">Drop again to replace</p>
@@ -96,6 +103,27 @@
           <p class="drop-text">Drop Spine files or folder here</p>
           <p class="drop-hint">skeleton.json · skeleton.atlas · images</p>
         </template>
+      </div>
+
+      <!-- Per-spine validation list -->
+      <div
+        v-if="loaderStore.spineSlots.length > 0 && loaderStore.spineSlots.some(s => s.error || s.validationErrors?.length)"
+        class="spine-validation-list"
+      >
+        <div
+          v-for="slot in loaderStore.spineSlots"
+          :key="slot.id"
+          class="spine-vrow"
+          :class="(slot.error || slot.validationErrors?.length) ? 'spine-vrow--err' : 'spine-vrow--ok'"
+        >
+          <span class="spine-vicon">{{ (slot.error || slot.validationErrors?.length) ? '✗' : '✓' }}</span>
+          <span class="spine-vname">{{ slot.name }}</span>
+          <span v-if="slot.error" class="spine-verr">{{ slot.error }}</span>
+          <span v-else-if="slot.validationErrors?.length" class="spine-verr" :title="slot.validationErrors.join('\n')">
+            {{ slot.validationErrors[0] }}
+            <template v-if="slot.validationErrors.length > 1"> &middot; +{{ slot.validationErrors.length - 1 }} more</template>
+          </span>
+        </div>
       </div>
 
       <div v-if="versionUnknown" class="version-unknown-hint">
@@ -155,6 +183,7 @@
       <n-button
         size="large"
         class="compare-btn"
+        :disabled="!store.isReady"
         @click="onOpenCompare"
       >
         ⇄ Compare
@@ -184,6 +213,7 @@ import { useVersionStore, type PixiVersion, type SpineVersion } from '@/core/sto
 import { useLoaderStore } from '@/core/stores/useLoaderStore'
 import { groupSpineFiles, getFilesFromDataTransfer } from '@/core/utils/fileLoader'
 import { detectSpineVersion, detectSpineVersionFromSkel } from '@/core/utils/versionDetector'
+import { validateSpineFileSet } from '@/core/utils/spineValidator'
 import SettingsPopover from '@/components/ui/SettingsPopover.vue'
 import HelpModal from '@/components/ui/HelpModal.vue'
 import type { SpineFileType } from '@/core/types/FileSet'
@@ -241,6 +271,14 @@ async function handleFiles(files: File[]) {
       : detectSpineVersionFromSkel(skeleton.fileBody as ArrayBuffer)
   }
 
+  // Run static validation on each slot before storing
+  for (const slot of result.slots) {
+    if (slot.fileSet) {
+      const errs = validateSpineFileSet(slot.fileSet)
+      if (errs.length > 0) slot.validationErrors = errs
+    }
+  }
+
   loaderStore.setSlots(result.slots, version)
 
   if (version && version !== 'unknown') {
@@ -277,11 +315,13 @@ function onClear() {
 }
 
 function onOpenCompare() {
-  const validSlots = loaderStore.spineSlots.map((s, i) => ({ s, i })).filter(({ s }) => !s.error)
-  if (validSlots.length >= 2) {
-    emit('open-compare', { left: validSlots[0].i, right: validSlots[1].i })
-  } else if (validSlots.length === 1) {
-    emit('open-compare', { left: validSlots[0].i })
+  const slots = loaderStore.spineSlots
+    .map((s, i) => ({ s, i }))
+    .filter(({ s }) => !s.error && !(s.validationErrors?.length))
+  if (slots.length >= 2) {
+    emit('open-compare', { left: slots[0].i, right: slots[1].i })
+  } else if (slots.length === 1) {
+    emit('open-compare', { left: slots[0].i })
   } else {
     emit('open-compare', {})
   }
@@ -639,6 +679,59 @@ function formatSize(bytes: number): string {
   flex-shrink: 0;
   color: var(--c-text-faint);
   font-variant-numeric: tabular-nums;
+}
+
+/* ── Drop zone states (warn) ─────────────────────────────── */
+.drop-state-icon--warn { color: #f59e0b; }
+.drop-text-warn        { color: #f59e0b !important; }
+
+/* ── Spine validation list ───────────────────────────────── */
+.spine-validation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.spine-vrow {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 0.78rem;
+  padding: 3px 6px;
+  border-radius: 5px;
+}
+
+.spine-vrow--ok  { background: rgba(74, 222, 128, 0.06); }
+.spine-vrow--err { background: rgba(248, 113, 113, 0.08); }
+
+.spine-vicon {
+  font-size: 0.7rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  width: 12px;
+}
+
+.spine-vrow--ok  .spine-vicon { color: #4ade80; }
+.spine-vrow--err .spine-vicon { color: #f87171; }
+
+.spine-vname {
+  font-weight: 600;
+  flex-shrink: 0;
+  color: var(--c-text-dim);
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.spine-verr {
+  color: #f87171;
+  font-size: 0.72rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
 }
 
 /* ── Action buttons ──────────────────────────────────── */

@@ -391,6 +391,7 @@ onMounted(async () => {
       fps.value = Math.round(pixiApp!.ticker.FPS)
       profilerStore.recordFrame(fps.value, ms)
       if (spineAdapter) {
+        spineAdapter.tickPlaceholderLabels()
         const states = spineAdapter.getTrackStates()
         animationStore.setTracks(states)
         trackOverlay?.updateText('')
@@ -745,6 +746,18 @@ async function loadSpine(fileSet: FileSet): Promise<void> {
       slots:      spineAdapter.slots,
       events:     spineAdapter.events,
     })
+
+    // Placeholder labels: find bones/slots whose names contain "placeholder"
+    // Prefer slot over bone when both share the same name (slot has its own container)
+    const PH_RE = /placeholder/i
+    const phSlotNames = new Set(spineAdapter.slots.filter(s => PH_RE.test(s.name)).map(s => s.name))
+    const phItems: Array<{ name: string; kind: 'bone' | 'slot' | 'attachment' }> = [
+      ...[...phSlotNames].map(name => ({ name, kind: 'slot' as const })),
+      ...spineAdapter.bones
+        .filter(b => PH_RE.test(b.name) && !phSlotNames.has(b.name))
+        .map(b => ({ name: b.name, kind: 'bone' as const })),
+    ]
+    if (phItems.length > 0) spineAdapter.setPlaceholderLabels(phItems)
 
     // Subscribe to Spine events (unsubscribed automatically via spineAdapter.destroy())
     spineAdapter.onEvent(e => eventsStore.push(e))

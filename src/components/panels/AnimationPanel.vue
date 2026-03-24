@@ -340,10 +340,16 @@ const composerMode  = ref(false)
 const selectedSkin  = ref<string | null>(null)
 const composerSkins = ref(new Set<string>())
 
-watch(() => skeletonStore.skins, () => {
-  selectedSkin.value  = null
+watch(() => skeletonStore.skins, (skins) => {
   composerSkins.value = new Set()
   composerMode.value  = false
+  const firstNonDefault = skins.find(s => s !== 'default') ?? null
+  if (firstNonDefault) {
+    selectedSkin.value = firstNonDefault
+    emit('setSkins', [firstNonDefault])
+  } else {
+    selectedSkin.value = null
+  }
 })
 
 function onToggleComposer() {

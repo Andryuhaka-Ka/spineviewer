@@ -4,12 +4,15 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="76266a3f-c6bb-4d4e-a45c-2b17cdf27e49" name="Changes" comment="added README.md and help popup">
+    <list default="true" id="76266a3f-c6bb-4d4e-a45c-2b17cdf27e49" name="Changes" comment="fixed pixi inspector">
+      <change beforePath="$PROJECT_DIR$/.claude/settings.local.json" beforeDir="false" afterPath="$PROJECT_DIR$/.claude/settings.local.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/package-lock.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/package.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/components/ui/HelpModal.vue" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/ui/HelpModal.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/vite.config.ts" beforeDir="false" afterPath="$PROJECT_DIR$/vite.config.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/CLAUDE.md" beforeDir="false" afterPath="$PROJECT_DIR$/CLAUDE.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/pages/VersionPickerPage.vue" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/pages/VersionPickerPage.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/panels/AnimationPanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/panels/AnimationPanel.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/stage/PreviewStage.vue" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/stage/PreviewStage.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/core/stores/useLoaderStore.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/stores/useLoaderStore.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/core/types/FileSet.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/types/FileSet.ts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -23,7 +26,7 @@
     </option>
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="112" />
+    <option name="cachedIndexableFilesCount" value="159" />
     <option name="fileBasedEmbeddingIndicesEnabled" value="true" />
   </component>
   <component name="Git.Settings">
@@ -77,6 +80,9 @@
     <key name="CopyFile.RECENT_KEYS">
       <recent name="D:\tools\spine_viewer\spine_viewer_pro\example" />
     </key>
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="D:\tools\spine_viewer\spine_viewer_pro\example" />
+    </key>
   </component>
   <component name="RunManager" selected="npm.dev">
     <configuration name="build" type="js.build_tools.npm" temporary="true" nameIsGenerated="true">
@@ -124,7 +130,9 @@
       <workItem from="1773162309652" duration="8797000" />
       <workItem from="1773223827591" duration="7715000" />
       <workItem from="1773317897492" duration="5830000" />
-      <workItem from="1773741307928" duration="15065000" />
+      <workItem from="1773741307928" duration="53650000" />
+      <workItem from="1774280855080" duration="8717000" />
+      <workItem from="1774361634137" duration="1351000" />
     </task>
     <task id="LOCAL-00001" summary="перший коміт">
       <option name="closed" value="true" />
@@ -438,7 +446,15 @@
       <option name="project" value="LOCAL" />
       <updated>1773764573002</updated>
     </task>
-    <option name="localTasksCounter" value="40" />
+    <task id="LOCAL-00040" summary="fixed pixi inspector">
+      <option name="closed" value="true" />
+      <created>1773995841628</created>
+      <option name="number" value="00040" />
+      <option name="presentableId" value="LOCAL-00040" />
+      <option name="project" value="LOCAL" />
+      <updated>1773995841628</updated>
+    </task>
+    <option name="localTasksCounter" value="41" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -456,7 +472,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="step 7" />
     <MESSAGE value="add white theme" />
     <MESSAGE value="step 8" />
     <MESSAGE value="step 9" />
@@ -481,6 +496,7 @@
     <MESSAGE value="added pixi inspector support and favicon.ico" />
     <MESSAGE value="fixed loop wrap-around detection and DC &amp; version bump" />
     <MESSAGE value="added README.md and help popup" />
-    <option name="LAST_COMMIT_MESSAGE" value="added README.md and help popup" />
+    <MESSAGE value="fixed pixi inspector" />
+    <option name="LAST_COMMIT_MESSAGE" value="fixed pixi inspector" />
   </component>
 </project>

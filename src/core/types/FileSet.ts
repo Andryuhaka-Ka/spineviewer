@@ -42,6 +42,7 @@ export interface SpineSlot {
   id: string
   name: string
   fileSet?: FileSet             // undefined when error is set
-  error?: string                // set for unmatched / incomplete slots
+  error?: string                // set for unmatched / incomplete slots (classification)
+  validationErrors?: string[]   // content validation errors (missing images, regions, etc.)
   savedState?: SpineSlotSavedState
 }

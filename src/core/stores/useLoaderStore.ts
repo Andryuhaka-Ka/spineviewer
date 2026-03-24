@@ -45,7 +45,9 @@ export const useLoaderStore = defineStore('loader', () => {
   )
 
   const hasFiles = computed(() => pendingFiles.value.length > 0)
-  const isLoaded = computed(() => spineSlots.value.some(s => !s.error))
+  /** Slots that passed both classification and content validation */
+  const validSlots = computed(() => spineSlots.value.filter(s => !s.error && !(s.validationErrors?.length)))
+  const isLoaded = computed(() => validSlots.value.length > 0)
 
   function setPendingFiles(files: File[]) {
     pendingFiles.value    = files
@@ -54,11 +56,11 @@ export const useLoaderStore = defineStore('loader', () => {
     detectedVersion.value = null
   }
 
-  /** Replace all slots; activates the first valid one. */
+  /** Replace all slots; activates the first fully-valid slot. */
   function setSlots(slots: SpineSlot[], version: string | null) {
     spineSlots.value      = slots.slice(0, SPINE_SLOTS_LIMIT)
     detectedVersion.value = version
-    const first           = spineSlots.value.find(s => !s.error)
+    const first           = spineSlots.value.find(s => !s.error && !(s.validationErrors?.length))
     activeSlotId.value    = first?.id ?? null
   }
 
@@ -99,6 +101,7 @@ export const useLoaderStore = defineStore('loader', () => {
     detectedVersion,
     pendingFileInfos,
     hasFiles,
+    validSlots,
     isLoaded,
     setPendingFiles,
     setSlots,

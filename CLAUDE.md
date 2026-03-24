@@ -1,17 +1,90 @@
-# Spine Viewer Pro — Claude Instructions
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project
 
 Browser-based Spine skeletal animation viewer. Vue 3 + TypeScript + Vite 5 + Pinia + Naive UI + Pixi.js 7 & 8.
 
-Full architecture, progress, and conventions in `MEMORY.md` at:
+Full architecture progress and conventions in `MEMORY.md` at:
 `C:\Users\akarpus\.claude\projects\D--tools-spine-viewer-spine-viewer-pro\memory\MEMORY.md`
 
 ---
 
-## Slash Commands (Skills)
+## Commands
 
-Use these commands to avoid repetitive setup work:
+```bash
+npm run dev          # Start Vite dev server
+npm run build        # vue-tsc type check + Vite production build
+npm run typecheck    # Type check only (no emit)
+npm run preview      # Preview production build
+```
+
+No test runner is configured — verification is done via `typecheck` + manual QA.
+
+---
+
+## Architecture
+
+### Pages & Navigation
+
+`src/App.vue` controls top-level routing via a `page` ref (`'picker' | 'viewer' | 'compare'`). No Vue Router.
+
+- `VersionPickerPage.vue` — selects Pixi version (7|8) + Spine version (3.8/4.0/4.1/4.2), handles file drag-drop + auto-detection, navigates to viewer
+- `ViewerPage.vue` — toolbar + `PreviewStage.vue` + side panel tabs
+- `ComparePage.vue` — side-by-side comparison mode with `CompareSplitStage.vue`
+
+### Dual Pixi Strategy
+
+Two Pixi.js instances coexist in one bundle:
+- `pixi.js` (v7) — aliased as `pixi7` in Vite, used by Pixi7App + all `@pixi-spine/*` adapters
+- `pixi8` (`npm:pixi.js@^8`) — aliased as `pixi8`, used by Pixi8App + `@esotericsoftware/spine-pixi-v8`
+
+Two Vite plugins (`spinePixi7Redirect`, `spinePixi8Redirect`) intercept `pixi.js` imports inside `@pixi-spine/*` and `@esotericsoftware/*` respectively, forcing them to the correct alias. Both must have `enforce: 'pre'`.
+
+**Critical rule:** Never import `pixi7` and `pixi8` aliases in the same file.
+
+Pixi7 adapters use `import * as PIXI from 'pixi.js'` (NOT the `pixi7` alias) — sharing one pre-bundle with `@pixi-spine` prevents a duplicate `extensions` registry that breaks renderer auto-detection.
+
+### Adapter Pattern
+
+`src/core/AdapterFactory.ts` lazily imports adapters so both Pixi versions are never bundled in the same chunk:
+
+```
+createPixiApp(pixiVersion, canvas, w, h) → IPixiApp
+createSpineAdapter(pixiVersion, spineVersion) → ISpineAdapter
+```
+
+Supported combos: `7-3.8`, `7-4.0`, `7-4.1`, `8-4.2`.
+
+All adapters implement `ISpineAdapter` (`src/core/types/ISpineAdapter.ts`) — components never touch Spine or Pixi APIs directly. `BasePixi7Adapter` (`src/adapters/pixi7/`) is the shared Pixi7 base; subclasses inject their `spineModule`.
+
+### State Management
+
+All stores live in `src/core/stores/`. Key stores:
+- `useVersionStore` — PixiVersion (7|8), SpineVersion, persisted to localStorage
+- `useLoaderStore` — pending file sets, classification state
+- `useViewerStore` — bgColor, zoom, posX, posY
+- `useAnimationStore` — track state, playback controls
+- `useSkeletonStore` — bones, slots, skins, inspector state
+- `useCompareStore` — compare mode slots and diff state
+
+localStorage keys use the prefix `svp:<feature>:<key>`.
+
+### File Loading Flow
+
+1. User drops files → `src/core/utils/fileLoader.ts` classifies them into `FileSet` (`skeleton + atlas + images[]`)
+2. `versionDetector.ts` parses the JSON/binary to suggest a Spine version
+3. `spineValidator.ts` validates the FileSet before loading
+4. `PreviewStage.vue` receives the `FileSet`, calls `AdapterFactory` to build the adapter, then calls `adapter.load(fileSet)` + `adapter.mount(container)`
+
+### Panel Tabs (ViewerPage)
+
+Tabs rendered in `ViewerPage.vue`: Anim · Skeleton · Inspector · Events · Atlas · Perf · Compl · Export. Each tab is a separate component in `src/components/panels/`.
+
+---
+
+## Slash Commands (Skills)
 
 | Command | When to use |
 |---------|-------------|
@@ -24,52 +97,24 @@ Use these commands to avoid repetitive setup work:
 | `/git-checkpoint` | Stage and commit current progress |
 
 **Trigger rules:**
-- Say "зроби компонент" / "новий компонент" / "create component" → `/scaffold-component`
-- Say "зроби стор" / "новий стор" / "create store" → `/scaffold-store`
-- Say "збережи прогрес" / "зроби коміт" / "commit" → `/git-checkpoint`
-- Say "наступний крок" / "next step" (без уточнення) → `/next-step`
-- Say "наступний крок compare" / "continue compare" → `/compare-step`
+- "зроби компонент" / "новий компонент" / "create component" → `/scaffold-component`
+- "зроби стор" / "новий стор" / "create store" → `/scaffold-store`
+- "збережи прогрес" / "зроби коміт" / "commit" → `/git-checkpoint`
+- "наступний крок" / "next step" (без уточнення) → `/next-step`
+- "наступний крок compare" / "continue compare" → `/compare-step`
 
 ---
 
 ## Subagents — When to Use
 
-### Explore agent
-Use **proactively** before writing code that touches unfamiliar parts of the codebase.
+**Explore agent** — use proactively before writing code that touches unfamiliar parts:
+- Modifying an adapter → read all files in `src/adapters/`
+- Adding a panel tab → read existing panels in `src/components/panels/`
+- Touching `ISpineAdapter` → read all adapter implementations to check impact
 
-| Trigger | What to explore |
-|---------|----------------|
-| Modifying an adapter | Read all adapter files in `src/adapters/` to understand the pattern |
-| Adding a new panel tab | Read existing panel components in `src/components/panels/` |
-| Touching `ISpineAdapter` | Read all adapter implementations to check impact |
-| Implementing Compare steps 7–13 | Read `CompareSplitStage.vue` + `useCompareStore.ts` before adding components |
+**Quick searches** (no agent needed): single file → `Read`, type usage → `Grep`, file by name → `Glob`.
 
-**Quick searches** (Glob/Grep directly, no agent needed):
-- Finding a specific file → `Glob`
-- Finding where a type is used → `Grep`
-- Reading 1–3 specific files → `Read`
-
-### Plan agent
-Use when the task is complex and architectural decisions matter before writing code.
-
-| Trigger | What to plan |
-|---------|-------------|
-| Starting a new Compare step that touches 3+ files | Full implementation plan with order + pitfalls |
-| Adding a new feature that spans stores + components + adapters | Interface design + integration points |
-| Unsure about sync mechanism or state flow | Explicit data flow diagram before coding |
-
-**Do NOT** use Plan agent for:
-- Simple component additions
-- CSS fixes
-- Single-file changes
-
-### General-purpose agent
-Use when a search requires multiple rounds (Glob → Grep → Read → Grep again).
-
-| Trigger | Example |
-|---------|---------|
-| "Find where X is called across the whole project" | `getAnimationNames()` usage |
-| "Check if there are any TypeScript errors related to Y" | After a type refactor |
+**Plan agent** — use when a task spans stores + components + adapters and architectural decisions must be made first.
 
 ---
 
@@ -102,10 +147,10 @@ Use when a search requires multiple rounds (Glob → Grep → Read → Grep agai
 ### Vue components
 - Always `<script setup lang="ts">` — never Options API
 - Auto-imports: `ref`, `computed`, `watch`, `onMounted`, `defineStore` — no manual Vue/Pinia imports
-- Naive UI components auto-imported — no manual imports
+- Naive UI components auto-imported via `unplugin-vue-components` + `NaiveUiResolver` — no manual imports
 - Use `<style scoped>` unless sharing styles is required
 
-### Stores (`src/core/stores/`)
+### Stores
 - Composition API style only: `defineStore('id', () => { ... })`
 - localStorage keys: `svp:<feature>:<key>`
 
@@ -125,3 +170,9 @@ Use when a search requires multiple rounds (Glob → Grep → Read → Grep agai
 1. Run `/check` — fix any TypeScript errors before moving on
 2. Run `/git-checkpoint` if the step is complete and working
 3. Update `MEMORY.md` progress section if a plan step is done
+
+## Code Navigation Serena MCP is connected and must be used for all codebase navigation. Prefer Serena tools over reading files directly:  
+- mcp__serena__get_symbols_overview — get structure of a file before reading it 
+- mcp__serena__find_symbol — locate any class, method, or property by name 
+- mcp__serena__find_referencing_symbols — find all callers/usages of a symbol 
+- mcp__serena__search_for_pattern — pattern search across the codebase Only use the Read tool when you need the full implementation body of a specific symbol that Serena has already identified.
