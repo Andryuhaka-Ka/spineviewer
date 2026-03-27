@@ -275,6 +275,7 @@ onMounted(async () => {
           animDuration.value = t0.duration
         }
         updateHighlight()
+        // Updates placeholder marker positions each frame (Pixi7: PIXI.Text; Pixi8: PIXI.Sprite)
         adapterInst.tickPlaceholderLabels()
       }
     }
@@ -372,13 +373,18 @@ async function loadFileSet(fileSet: FileSet) {
   }
 }
 
+// ── Placeholder label sync ────────────────────────────────────────────────────
+
 // Watch diff to sync placeholder labels with Pixi scene.
 // Also called manually after loadFileSet in case diff didn't change (same diff, new adapter).
 function syncPlaceholderLabels() {
   if (!adapterInst) return
   const diff = compareStore.diff
-  if (diff?.placeholders?.length) {
-    adapterInst.setPlaceholderLabels(diff.placeholders)
+  const raw  = diff?.placeholders ?? []
+
+  // Both Pixi7 (PIXI.Text) and Pixi8 (PIXI.Sprite) handled entirely inside the adapter.
+  if (raw.length > 0) {
+    adapterInst.setPlaceholderLabels(raw)
   } else {
     adapterInst.clearPlaceholderLabels()
   }
