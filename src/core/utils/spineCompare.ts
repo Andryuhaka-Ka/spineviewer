@@ -98,6 +98,12 @@ export interface ConstraintRow {
   paramsChanged: boolean  // mix, direction, mode, etc.
 }
 
+export interface FreeBoneRow {
+  name:   string
+  /** ok = free in both; only-a = free in A but NOT free in B (B has keyframes for it); only-b = vice-versa */
+  status: 'ok' | 'only-a' | 'only-b'
+}
+
 export interface SpineDiff {
   source: 'json-full' | 'runtime-partial'
   summary: {
@@ -111,6 +117,7 @@ export interface SpineDiff {
   globalEvents:    GlobalEventRow[]   // available for both runtime and JSON
   animEvents:      AnimEventGroup[]   // per-animation timing; JSON-only
   constraintTable: ConstraintRow[]    // JSON-only
+  freeBoneTable:   FreeBoneRow[]      // runtime-only (empty for JSON-only diffs)
   placeholders: PlaceholderDiff[]
   sections:     DiffSection[]
 }
@@ -977,6 +984,25 @@ function buildConstraintTable(dataA: SpineData, dataB: SpineData): ConstraintRow
   return rows
 }
 
+function buildFreeBoneTable(dataA: SpineData, dataB: SpineData): FreeBoneRow[] {
+  if (dataA.source !== 'runtime' || dataB.source !== 'runtime') return []
+  const freeA = new Set(dataA.adapter.getFreeBones())
+  const freeB = new Set(dataB.adapter.getFreeBones())
+  const all = new Set([...freeA, ...freeB])
+  const rows: FreeBoneRow[] = []
+  for (const name of all) {
+    if (freeA.has(name) && freeB.has(name)) rows.push({ name, status: 'ok' })
+    else if (freeA.has(name))               rows.push({ name, status: 'only-a' })
+    else                                    rows.push({ name, status: 'only-b' })
+  }
+  rows.sort((a, b) => {
+    if (a.status !== 'ok' && b.status === 'ok') return -1
+    if (a.status === 'ok' && b.status !== 'ok') return 1
+    return a.name.localeCompare(b.name)
+  })
+  return rows
+}
+
 export async function compareSpines(dataA: SpineData, dataB: SpineData): Promise<SpineDiff> {
   const isJsonFull = dataA.source === 'json' && dataB.source === 'json'
   const sections: DiffSection[] = []
@@ -1013,6 +1039,7 @@ export async function compareSpines(dataA: SpineData, dataB: SpineData): Promise
   const globalEvents    = buildGlobalEvents(dataA, dataB)
   const animEvents      = buildAnimEvents(dataA, dataB)
   const constraintTable = buildConstraintTable(dataA, dataB)
+  const freeBoneTable   = buildFreeBoneTable(dataA, dataB)
 
   // Build summary
   const summary = { added: 0, removed: 0, changed: 0, equal: 0 }
@@ -1032,6 +1059,7 @@ export async function compareSpines(dataA: SpineData, dataB: SpineData): Promise
     globalEvents,
     animEvents,
     constraintTable,
+    freeBoneTable,
     placeholders,
     sections,
   }

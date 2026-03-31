@@ -136,6 +136,13 @@ export interface ISpineAdapter {
   // Returns AABB of the slot's attachment in Spine world space (Y-up), or null if unavailable
   getSlotBounds(slotName: string): SlotBounds | null
 
+  // Returns names of bones that have no keyframes in any animation (candidates for programmatic control)
+  getFreeBones(): string[]
+  // Set local-space transform on a live bone (does not require updateWorldTransform — runtime handles it)
+  setBoneLocalTransform(boneName: string, transform: Partial<{ x: number; y: number; rotation: number; scaleX: number; scaleY: number }>): void
+  // Returns the setup pose local transform for a bone (use for reset)
+  getBoneSetupTransform(boneName: string): { x: number; y: number; rotation: number; scaleX: number; scaleY: number } | null
+
   // Placeholder labels (pixi7: PIXI.Text; pixi8: PIXI.Sprite with canvas-generated texture)
   setPlaceholderLabels(items: Array<{ name: string; kind: 'bone' | 'slot' | 'attachment' }>): void
   clearPlaceholderLabels(): void

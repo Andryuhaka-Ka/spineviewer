@@ -404,6 +404,46 @@ export abstract class BasePixi7Adapter implements ISpineAdapter {
     return vertsToAABB(verts, count)
   }
 
+  // ── Free bones ──────────────────────────────────────────────────────────────
+
+  getFreeBones(): string[] {
+    if (!this._skeletonData) return []
+    const animated = new Set<string>()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const anim of this._skeletonData.animations ?? []) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const tl of anim.timelines ?? []) {
+        // spine 4.x: BoneTimeline has boneIndex (number) → look up name in skeletonData.bones
+        if (typeof tl.boneIndex === 'number') {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const bd = (this._skeletonData.bones as any[])[tl.boneIndex]
+          if (bd?.name) animated.add(bd.name)
+        }
+        // spine 3.8: BoneTimeline has bone.name directly (BoneData reference)
+        if (tl.bone?.name) animated.add(tl.bone.name)
+      }
+    }
+    return this.bones.filter(b => !animated.has(b.name)).map(b => b.name)
+  }
+
+  setBoneLocalTransform(boneName: string, transform: Partial<{ x: number; y: number; rotation: number; scaleX: number; scaleY: number }>): void {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const bone: any = this._spine?.skeleton.findBone(boneName)
+    if (!bone) return
+    if (transform.x        !== undefined) bone.x        = transform.x
+    if (transform.y        !== undefined) bone.y        = transform.y
+    if (transform.rotation !== undefined) bone.rotation = transform.rotation
+    if (transform.scaleX   !== undefined) bone.scaleX   = transform.scaleX
+    if (transform.scaleY   !== undefined) bone.scaleY   = transform.scaleY
+  }
+
+  getBoneSetupTransform(boneName: string): { x: number; y: number; rotation: number; scaleX: number; scaleY: number } | null {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const bd = (this._skeletonData?.bones as any[])?.find((b: any) => b.name === boneName)
+    if (!bd) return null
+    return { x: bd.x ?? 0, y: bd.y ?? 0, rotation: bd.rotation ?? 0, scaleX: bd.scaleX ?? 1, scaleY: bd.scaleY ?? 1 }
+  }
+
   // ── Placeholder labels ───────────────────────────────────────────────────────
 
   setPlaceholderLabels(items: Array<{ name: string; kind: 'bone' | 'slot' | 'attachment' }>): void {

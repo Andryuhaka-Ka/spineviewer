@@ -739,12 +739,14 @@ async function loadSpine(fileSet: FileSet): Promise<void> {
     applyViewport()
 
     // Fill skeleton store
+    skeletonStore.attachAdapter(spineAdapter)
     skeletonStore.populate({
       animations: spineAdapter.animations,
       skins:      spineAdapter.skins,
       bones:      spineAdapter.bones,
       slots:      spineAdapter.slots,
       events:     spineAdapter.events,
+      freeBones:  spineAdapter.getFreeBones(),
     })
 
     // Placeholder labels: find bones/slots whose names contain "placeholder"

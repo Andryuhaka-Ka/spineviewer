@@ -7,7 +7,7 @@
  */
 
 import { defineStore } from 'pinia'
-import type { BoneInfo, SlotInfo, EventInfo } from '@/core/types/ISpineAdapter'
+import type { BoneInfo, SlotInfo, EventInfo, ISpineAdapter } from '@/core/types/ISpineAdapter'
 
 export const useSkeletonStore = defineStore('skeleton', () => {
   const animations   = ref<string[]>([])
@@ -15,9 +15,13 @@ export const useSkeletonStore = defineStore('skeleton', () => {
   const bones        = ref<BoneInfo[]>([])
   const slots        = ref<SlotInfo[]>([])
   const events       = ref<EventInfo[]>([])
+  const freeBones    = ref<string[]>([])
   const selectedBone    = ref<string | null>(null)
   const selectedSlot    = ref<string | null>(null)
   const syncSelection   = ref(true)
+
+  // Non-reactive adapter reference — not stored in a ref to avoid Proxy wrapping class instances
+  let _adapter: ISpineAdapter | null = null
 
   const isLoaded = computed(() => animations.value.length > 0)
 
@@ -29,18 +33,31 @@ export const useSkeletonStore = defineStore('skeleton', () => {
     selectedSlot.value = selectedSlot.value === name ? null : name
   }
 
+  function attachAdapter(a: ISpineAdapter): void { _adapter = a }
+  function detachAdapter(): void { _adapter = null }
+
+  function setBoneTransform(boneName: string, transform: Partial<{ x: number; y: number; rotation: number; scaleX: number; scaleY: number }>): void {
+    _adapter?.setBoneLocalTransform(boneName, transform)
+  }
+
+  function getBoneSetupTransform(boneName: string): { x: number; y: number; rotation: number; scaleX: number; scaleY: number } | null {
+    return _adapter?.getBoneSetupTransform(boneName) ?? null
+  }
+
   function populate(data: {
     animations: string[]
     skins: string[]
     bones: BoneInfo[]
     slots: SlotInfo[]
     events: EventInfo[]
+    freeBones?: string[]
   }) {
     animations.value = data.animations
     skins.value      = data.skins
     bones.value      = data.bones
     slots.value      = data.slots
     events.value     = data.events
+    freeBones.value  = data.freeBones ?? []
   }
 
   function clear() {
@@ -49,9 +66,16 @@ export const useSkeletonStore = defineStore('skeleton', () => {
     bones.value        = []
     slots.value        = []
     events.value       = []
+    freeBones.value    = []
     selectedBone.value = null
     selectedSlot.value = null
+    _adapter = null
   }
 
-  return { animations, skins, bones, slots, events, isLoaded, selectedBone, selectBone, selectedSlot, selectSlot, syncSelection, populate, clear }
+  return {
+    animations, skins, bones, slots, events, freeBones, isLoaded,
+    selectedBone, selectBone, selectedSlot, selectSlot, syncSelection,
+    attachAdapter, detachAdapter, setBoneTransform, getBoneSetupTransform,
+    populate, clear,
+  }
 })

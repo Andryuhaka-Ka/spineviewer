@@ -65,6 +65,9 @@
           <n-tab-pane name="inspector" tab="Insp" class="tab-pane">
             <SkeletonPanel />
           </n-tab-pane>
+          <n-tab-pane v-if="skeletonStore.freeBones.length > 0" name="bones" tab="Bones" class="tab-pane">
+            <FreeBonePanel />
+          </n-tab-pane>
           <n-tab-pane name="atlas" tab="Atlas" class="tab-pane">
             <AtlasInspector />
           </n-tab-pane>
@@ -102,6 +105,7 @@
 import PreviewStage from '@/components/stage/PreviewStage.vue'
 import AnimationPanel from '@/components/panels/AnimationPanel.vue'
 import SkeletonPanel from '@/components/panels/SkeletonPanel.vue'
+import FreeBonePanel from '@/components/panels/FreeBonePanel.vue'
 import SpinesPanel from '@/components/panels/SpinesPanel.vue'
 import AtlasInspector from '@/components/panels/AtlasInspector.vue'
 import ProfilerPanel    from '@/components/panels/ProfilerPanel.vue'
@@ -127,7 +131,7 @@ const animationStore  = useAnimationStore()
 const loaderStore     = useLoaderStore()
 const exportStore     = useExportStore()
 const stageRef      = ref<InstanceType<typeof PreviewStage> | null>(null)
-const activeTab     = ref<'spines' | 'animation' | 'inspector' | 'atlas' | 'perf' | 'compl' | 'export'>('animation')
+const activeTab     = ref<'spines' | 'animation' | 'inspector' | 'bones' | 'atlas' | 'perf' | 'compl' | 'export'>('animation')
 
 // Auto-switch away from Spines tab when only 1 spine remains
 watch(

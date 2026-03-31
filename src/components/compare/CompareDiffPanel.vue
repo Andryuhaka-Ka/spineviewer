@@ -75,8 +75,9 @@
               <span v-if="changedPlaceholders > 0"         class="ov-badge ov-badge--err">{{ changedPlaceholders }} ph</span>
               <span v-if="constraintCriticalIssues > 0"   class="ov-badge ov-badge--err">{{ constraintCriticalIssues }} cstr</span>
               <span v-if="constraintParamIssues > 0"      class="ov-badge ov-badge--warn">{{ constraintParamIssues }} cstr param</span>
+              <span v-if="freeBoneIssues > 0"             class="ov-badge ov-badge--warn">{{ freeBoneIssues }} free bone</span>
 
-              <span v-if="animNameIssues === 0 && skinTableIssues === 0 && globalEventIssues === 0 && animEventNameIssues === 0 && changedPlaceholders === 0 && constraintCriticalIssues === 0" class="ov-badge ov-badge--ok">ok</span>
+              <span v-if="animNameIssues === 0 && skinTableIssues === 0 && globalEventIssues === 0 && animEventNameIssues === 0 && changedPlaceholders === 0 && constraintCriticalIssues === 0 && freeBoneIssues === 0" class="ov-badge ov-badge--ok">ok</span>
             </span>
           </div>
 
@@ -245,6 +246,28 @@
               </div>
               <div v-if="diffsOnly && diff.constraintTable.every(r => r.status === 'ok')" class="ov-empty">All constraints match</div>
             </template>
+
+            <!-- Free Bones -->
+            <div class="ov-sub-header">
+              <span class="ov-sub-title">{{ freeBoneIssues > 0 ? '⚠ ' : '' }}Free Bones</span>
+              <span class="ov-sub-hint">{{ diff.freeBoneTable.length }} total</span>
+            </div>
+            <template v-if="diff.freeBoneTable.length === 0">
+              <div class="ov-empty ov-empty--hint">No free bones (runtime only)</div>
+            </template>
+            <template v-else>
+              <div
+                v-for="row in visibleFreeBoneTable"
+                :key="row.name"
+                class="anim-row"
+                :class="row.status === 'ok' ? 'anim-row--ok' : row.status === 'only-a' ? 'anim-row--only-a' : 'anim-row--only-b'"
+              >
+                <span class="anim-row-icon">{{ row.status === 'ok' ? '✓' : row.status === 'only-a' ? '−' : '+' }}</span>
+                <span class="anim-row-name">{{ row.name }}</span>
+                <span class="ev-global-status">{{ row.status === 'ok' ? 'both' : row.status === 'only-a' ? 'A only' : 'B only' }}</span>
+              </div>
+              <div v-if="diffsOnly && diff.freeBoneTable.every(r => r.status === 'ok')" class="ov-empty">All free bones match</div>
+            </template>
           </template>
         </div>
 
@@ -266,7 +289,7 @@
 <script setup lang="ts">
 import CompareDiffSection from './CompareDiffSection.vue'
 import { useCompareStore } from '@/core/stores/useCompareStore'
-import type { PlaceholderDiff, AnimEventGroup, GlobalEventRow, SkinRow, ConstraintRow } from '@/core/utils/spineCompare'
+import type { PlaceholderDiff, AnimEventGroup, GlobalEventRow, SkinRow, ConstraintRow, FreeBoneRow } from '@/core/utils/spineCompare'
 
 const compareStore = useCompareStore()
 
@@ -412,7 +435,7 @@ const criticalIssuesTotal = computed(() =>
   animEventNameIssues.value + changedPlaceholders.value + constraintCriticalIssues.value,
 )
 const warnIssuesTotal = computed(() =>
-  animDurIssues.value + animEventTimingIssues.value + constraintParamIssues.value,
+  animDurIssues.value + animEventTimingIssues.value + constraintParamIssues.value + freeBoneIssues.value,
 )
 
 
@@ -421,6 +444,19 @@ const visibleConstraintTable = computed<ConstraintRow[]>(() => {
   return diffsOnly.value
     ? diff.value.constraintTable.filter(r => r.status !== 'ok')
     : diff.value.constraintTable
+})
+
+// ── Free bone table computed ──────────────────────────────────────────────────
+
+const freeBoneIssues = computed(() =>
+  diff.value?.freeBoneTable.filter(r => r.status !== 'ok').length ?? 0,
+)
+
+const visibleFreeBoneTable = computed<FreeBoneRow[]>(() => {
+  if (!diff.value) return []
+  return diffsOnly.value
+    ? diff.value.freeBoneTable.filter(r => r.status !== 'ok')
+    : diff.value.freeBoneTable
 })
 
 // ids moved to Reskin Overview — don't duplicate in generic sections

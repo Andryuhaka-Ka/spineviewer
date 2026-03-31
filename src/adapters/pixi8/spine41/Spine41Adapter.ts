@@ -49,4 +49,7 @@ export default class StubAdapter implements ISpineAdapter {
   setPlaceholderLabels(_items: Array<{ name: string; kind: 'bone' | 'slot' | 'attachment' }>): void { /* no-op */ }
   clearPlaceholderLabels(): void { /* no-op */ }
   tickPlaceholderLabels(): void { /* no-op */ }
+  getFreeBones(): string[] { return [] }
+  setBoneLocalTransform(_boneName: string, _transform: Partial<{ x: number; y: number; rotation: number; scaleX: number; scaleY: number }>): void { /* no-op */ }
+  getBoneSetupTransform(_boneName: string): { x: number; y: number; rotation: number; scaleX: number; scaleY: number } | null { return null }
 }

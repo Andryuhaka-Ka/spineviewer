@@ -1,11 +1,11 @@
 {
   "name": "spine-viewer-pro",
-  "version": "1.2.10",
+  "version": "1.2.11",
   "private": true,
-  "homepage": "https://andryuhaka-ka.github.io/spineviewer/",
+  "homepage": "https://andryuha-ka.github.io/spineviewer/",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Andryuhaka-Ka/spineviewer.git"
+    "url": "https://github.com/Andryuha-Ka/spineviewer.git"
   },
   "type": "module",
   "scripts": {
