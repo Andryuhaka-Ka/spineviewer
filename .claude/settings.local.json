@@ -37,7 +37,15 @@
       "mcp__plugin_serena_serena__activate_project",
       "mcp__plugin_serena_serena__check_onboarding_performed",
       "mcp__plugin_serena_serena__initial_instructions",
-      "mcp__plugin_serena_serena__search_for_pattern"
+      "mcp__plugin_serena_serena__search_for_pattern",
+      "Bash(head -5 grep -l \"spine\\\\|Spine\" /d/tools/spine_viewer/spine_viewer_pro/node_modules/.vite/deps/chunk-RLZR4BYO.js)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(k\\) for k in d.get\\(''''chunks'''',{}\\).keys\\(\\) if ''''RLZR'''' in k or ''''pixi8'''' in k.lower\\(\\)]\")",
+      "Bash(head -15 grep -n \"emit.*loaded\\\\|on.*loaded\\\\|@loaded\" /d/tools/spine_viewer/spine_viewer_pro/src/components/compare/CompareSplitStage.vue)",
+      "Bash(npm run:*)",
+      "Bash(npm show:*)",
+      "Bash(cd:*)",
+      "Bash(\"D:/tools/spine_viewer/spine_viewer_pro/tmp_parse.cjs\":*)",
+      "Bash(node -e:*)"
     ]
   }
 }
