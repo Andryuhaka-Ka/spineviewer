@@ -15,11 +15,16 @@ export const useViewerStore = defineStore('viewer', () => {
   const posY       = ref(0)
   const showOrigin = ref(false)
 
+  const showPlaceholders = ref(
+    localStorage.getItem('svp:viewer:showPlaceholders') !== 'false',
+  )
+  watch(showPlaceholders, v => localStorage.setItem('svp:viewer:showPlaceholders', String(v)))
+
   function resetView() {
     zoom.value = 1
     posX.value = 0
     posY.value = 0
   }
 
-  return { bgColor, zoom, posX, posY, showOrigin, resetView }
+  return { bgColor, zoom, posX, posY, showOrigin, showPlaceholders, resetView }
 })

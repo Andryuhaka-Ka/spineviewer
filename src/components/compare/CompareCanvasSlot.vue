@@ -70,8 +70,17 @@
       </div>
     </Transition>
 
-    <!-- Top-left overlay: bg color + center button -->
+    <!-- Top-left overlay: bg color + placeholder toggle -->
     <div v-if="hasFileSet" class="overlay-tl">
+      <input
+        type="checkbox"
+        class="ph-toggle"
+        :checked="viewerStore.showPlaceholders"
+        title="Show placeholder labels"
+        @change="viewerStore.showPlaceholders = ($event.target as HTMLInputElement).checked"
+        @click.stop
+      />
+      <span class="overlay-hint ph-hint">ph</span>
       <input
         type="color"
         class="bg-input"
@@ -131,6 +140,7 @@ import type { FileSet } from '@/core/types/FileSet'
 import { createPixiApp, createSpineAdapter } from '@/core/AdapterFactory'
 import { useVersionStore } from '@/core/stores/useVersionStore'
 import { useCompareStore } from '@/core/stores/useCompareStore'
+import { useViewerStore } from '@/core/stores/useViewerStore'
 
 // ── Props ──────────────────────────────────────────────────────────────────────
 
@@ -206,8 +216,9 @@ let panStart = { x: 0, y: 0, px: 0, py: 0 }
 
 // ── Stores ─────────────────────────────────────────────────────────────────────
 
-const versionStore = useVersionStore()
-const compareStore = useCompareStore()
+const versionStore  = useVersionStore()
+const compareStore  = useCompareStore()
+const viewerStore   = useViewerStore()
 
 // ── Computed ───────────────────────────────────────────────────────────────────
 
@@ -383,7 +394,7 @@ function syncPlaceholderLabels() {
   const raw  = diff?.placeholders ?? []
 
   // Both Pixi7 (PIXI.Text) and Pixi8 (PIXI.Sprite) handled entirely inside the adapter.
-  if (raw.length > 0) {
+  if (raw.length > 0 && viewerStore.showPlaceholders) {
     adapterInst.setPlaceholderLabels(raw)
   } else {
     adapterInst.clearPlaceholderLabels()
@@ -391,6 +402,7 @@ function syncPlaceholderLabels() {
 }
 
 watch(() => compareStore.diff, syncPlaceholderLabels)
+watch(() => viewerStore.showPlaceholders, syncPlaceholderLabels)
 
 function updateHighlight() {
   const hl = compareStore.selectedHighlight
@@ -687,7 +699,17 @@ async function onDrop(e: DragEvent) {
   color: rgba(255,255,255,0.35);
   user-select: none;
   cursor: default;
-  title: 'Double-click to center';
+}
+
+.ph-toggle {
+  width: 11px;
+  height: 11px;
+  cursor: pointer;
+  accent-color: #7c6af5;
+}
+
+.ph-hint {
+  cursor: default;
 }
 
 .overlay-tr {

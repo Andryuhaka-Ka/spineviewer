@@ -56,6 +56,13 @@
         />
         <span class="origin-label" title="Center scene" @click="onResetView">origin</span>
         <input
+          type="checkbox"
+          v-model="viewerStore.showPlaceholders"
+          title="Show placeholder labels"
+          class="ph-toggle"
+        />
+        <span class="ph-label">ph</span>
+        <input
           type="color"
           class="bg-color-input"
           :value="bgColorHex"
@@ -182,6 +189,15 @@ const fpsClass = computed(() => {
 
 let pixiApp: IPixiApp | null = null
 let spineAdapter: ISpineAdapter | null = null
+
+// Cached placeholder items — used to re-apply when toggle is turned back on
+let _phItems: Array<{ name: string; kind: 'bone' | 'slot' | 'attachment' }> = []
+
+watch(() => viewerStore.showPlaceholders, (show) => {
+  if (!spineAdapter) return
+  if (show && _phItems.length > 0) spineAdapter.setPlaceholderLabels(_phItems)
+  else spineAdapter.clearPlaceholderLabels()
+})
 
 // ── Viewport ──────────────────────────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -759,7 +775,8 @@ async function loadSpine(fileSet: FileSet): Promise<void> {
         .filter(b => PH_RE.test(b.name) && !phSlotNames.has(b.name))
         .map(b => ({ name: b.name, kind: 'bone' as const })),
     ]
-    if (phItems.length > 0) spineAdapter.setPlaceholderLabels(phItems)
+    _phItems = phItems
+    if (phItems.length > 0 && viewerStore.showPlaceholders) spineAdapter.setPlaceholderLabels(phItems)
 
     // Subscribe to Spine events (unsubscribed automatically via spineAdapter.destroy())
     spineAdapter.onEvent(e => eventsStore.push(e))
@@ -968,6 +985,19 @@ defineExpose({
 .bg-color-input::-webkit-color-swatch { border: 1px solid rgba(255,255,255,0.2); border-radius: 3px; }
 
 .bg-color-label {
+  color: rgba(255,255,255,0.45);
+  font-size: inherit;
+  user-select: none;
+}
+
+.ph-toggle {
+  width: 12px;
+  height: 12px;
+  cursor: pointer;
+  accent-color: #7c6af5;
+}
+
+.ph-label {
   color: rgba(255,255,255,0.45);
   font-size: inherit;
   user-select: none;

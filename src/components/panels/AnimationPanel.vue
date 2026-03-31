@@ -18,11 +18,12 @@
         :disabled="!skeletonStore.isLoaded"
         placeholder="Select animation…"
         size="small"
-        expand-trigger="click"
+        expand-trigger="hover"
         :show-path="true"
         check-strategy="child"
         clearable
         style="width: 100%"
+        :render-label="renderCascaderLabel"
         @update:value="onCascaderSelect"
       />
     </section>
@@ -276,6 +277,7 @@
 </template>
 
 <script setup lang="ts">
+import { h, type VNodeChild } from 'vue'
 import type { CascaderOption } from 'naive-ui'
 import { useSkeletonStore } from '@/core/stores/useSkeletonStore'
 import { useAnimationStore } from '@/core/stores/useAnimationStore'
@@ -395,6 +397,27 @@ const selectedAnimation = computed<string | null>({
   get: () => animationStore.selectedAnimation,
   set: (v) => { animationStore.selectedAnimation = v },
 })
+
+// Set of option values that are in the currently selected animation's path.
+// Used by renderCascaderLabel to keep the selected path highlighted while navigating.
+const selectedValuePath = computed<Set<string>>(() => {
+  const sel = animationStore.selectedAnimation
+  if (!sel) return new Set()
+  const parts = sel.split('/')
+  const set = new Set<string>()
+  set.add(sel)
+  for (let i = 1; i < parts.length; i++) {
+    set.add(`__group__${parts.slice(0, i).join('/')}`)
+  }
+  return set
+})
+
+function renderCascaderLabel(option: CascaderOption, _checked: boolean): VNodeChild {
+  const inSelected = selectedValuePath.value.has(String(option.value ?? ''))
+  return h('span', {
+    style: inSelected ? { color: '#9d8fff', fontWeight: '600' } : undefined,
+  }, String(option.label ?? ''))
+}
 
 function isTrackRunning(index: number): boolean {
   return animationStore.tracks.some(t => t.trackIndex === index)

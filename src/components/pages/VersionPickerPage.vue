@@ -8,6 +8,54 @@
 
 <template>
   <div class="picker">
+    <!-- ── History sidebar (left, fixed) ──────────────────────── -->
+    <aside v-if="historySessions.length > 0" class="history-sidebar">
+      <div class="history-hdr">
+        <span class="history-title">History</span>
+        <button class="history-clear" title="Clear history" @click="onClearHistory">✕</button>
+      </div>
+      <div class="history-list">
+        <template v-for="(group, gi) in groupedHistory" :key="group.dateLabel">
+          <div v-if="gi > 0" class="history-day-sep" />
+          <div class="history-day-label">{{ group.dateLabel }}</div>
+          <div
+            v-for="session in group.sessions"
+            :key="session.id"
+            class="history-session"
+            :class="{ 'history-session--loading': reloadingId === session.id }"
+            :title="session.fileNames.join('\n')"
+            @click="onSessionClick(session)"
+          >
+            <span class="session-time">{{ formatSessionTime(session.timestamp) }}</span>
+            <div class="session-files">
+              <span
+                v-for="name in session.fileNames.slice(0, 3)"
+                :key="name"
+                class="session-file"
+              >{{ name }}</span>
+              <span v-if="session.fileNames.length > 3" class="session-more">
+                +{{ session.fileNames.length - 3 }}
+              </span>
+            </div>
+            <span v-if="reloadingId === session.id" class="session-loading">…</span>
+            <span v-else-if="session.hasHandles" class="session-badge" title="Click to reload automatically">↺</span>
+            <button
+              class="session-delete"
+              title="Remove from history"
+              @click.stop="onDeleteSession(session)"
+            >✕</button>
+          </div>
+        </template>
+      </div>
+      <!-- Variant A hint: show when no handles and user clicked a session -->
+      <div v-if="reloadHint.length > 0" class="reload-hint">
+        <span class="reload-hint-title">Open these files again:</span>
+        <span v-for="name in reloadHint" :key="name" class="reload-hint-file">{{ name }}</span>
+        <button class="reload-hint-btn" @click="fileInputRef?.click(); reloadHint = []">Choose files</button>
+        <button class="reload-hint-close" @click="reloadHint = []">✕</button>
+      </div>
+    </aside>
+
     <div class="picker-top-bar">
       <HelpModal />
       <SettingsPopover />
@@ -130,8 +178,8 @@
       </div>
 
       <div class="picker-row">
-        <n-button size="small" ghost @click="fileInputRef?.click()">Choose files</n-button>
-        <n-button size="small" ghost @click="folderInputRef?.click()">Choose folder</n-button>
+        <n-button size="small" ghost @click="onChooseFiles">Choose files</n-button>
+        <n-button size="small" ghost @click="onChooseFolder">Choose folder</n-button>
         <n-button
           v-if="loaderStore.hasFiles"
           size="small"
@@ -213,6 +261,11 @@ import { useLoaderStore } from '@/core/stores/useLoaderStore'
 import { groupSpineFiles, getFilesFromDataTransfer } from '@/core/utils/fileLoader'
 import { detectSpineVersion, detectSpineVersionFromSkel } from '@/core/utils/versionDetector'
 import { validateSpineFileSet } from '@/core/utils/spineValidator'
+import {
+  saveSession, getSessions, reloadSession, getSessionHandles, deleteSession, clearHistory,
+  isFileSystemAccessSupported, pickFilesViaFSAA, pickFolderViaFSAA,
+  type HistorySession,
+} from '@/core/utils/fileHistory'
 import SettingsPopover from '@/components/ui/SettingsPopover.vue'
 import HelpModal from '@/components/ui/HelpModal.vue'
 import type { SpineFileType } from '@/core/types/FileSet'
@@ -233,6 +286,101 @@ const versionUnknown   = ref(false)
 const fileInputRef     = ref<HTMLInputElement | null>(null)
 const folderInputRef   = ref<HTMLInputElement | null>(null)
 
+// ── File history state ────────────────────────────────────────────────────────
+
+const historySessions  = ref<HistorySession[]>(getSessions())
+const reloadingId      = ref<string | null>(null)
+const reloadHint       = ref<string[]>([])
+const hintStartHandle  = ref<FileSystemHandle | null>(null)
+
+const groupedHistory = computed(() => {
+  const groups = new Map<string, HistorySession[]>()
+  for (const s of historySessions.value) {
+    const key = new Date(s.timestamp).toDateString()
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(s)
+  }
+  const today     = new Date().toDateString()
+  const yesterday = new Date(Date.now() - 86_400_000).toDateString()
+  return [...groups.entries()].map(([key, sessions]) => ({
+    dateLabel: key === today ? 'Today' : key === yesterday ? 'Yesterday' : key,
+    sessions,
+  }))
+})
+
+function formatSessionTime(ts: number): string {
+  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+async function onSessionClick(session: HistorySession) {
+  reloadHint.value = []
+  hintStartHandle.value = null
+
+  if (isFileSystemAccessSupported()) {
+    reloadingId.value = session.id
+    try {
+      // Variant B: try silent auto-reload from stored handles
+      if (session.hasHandles) {
+        const files = await reloadSession(session)
+        if (files && files.length > 0) {
+          await handleFiles(files, undefined, true)
+          emit('open')
+          return
+        }
+      }
+      // Variant B fallback: open picker starting in the session's directory
+      const handles = await getSessionHandles(session.id)
+      const startHandle = handles?.[0] ?? undefined
+      const result = await pickFilesViaFSAA(true, startHandle)
+      if (result) {
+        await handleFiles(result.files, result.handles, true)
+        emit('open')
+        return
+      }
+    } finally {
+      reloadingId.value = null
+    }
+    return
+  }
+
+  // Variant A (no FSAA): show file list hint only, user must pick files manually
+  reloadHint.value = session.fileNames
+}
+
+async function onDeleteSession(session: HistorySession) {
+  await deleteSession(session.id)
+  historySessions.value = getSessions()
+  if (reloadHint.value.length > 0 && reloadHint.value.join() === session.fileNames.join()) {
+    reloadHint.value = []
+  }
+}
+
+async function onClearHistory() {
+  await clearHistory()
+  historySessions.value = []
+  reloadHint.value = []
+}
+
+// ── File picking ──────────────────────────────────────────────────────────────
+
+async function onChooseFiles() {
+  if (isFileSystemAccessSupported()) {
+    const result = await pickFilesViaFSAA(true)
+    if (result) { await handleFiles(result.files, result.handles); return }
+  }
+  fileInputRef.value?.click()
+}
+
+async function onChooseFolder() {
+  if (isFileSystemAccessSupported()) {
+    const result = await pickFolderViaFSAA()
+    if (result) { await handleFiles(result.files, result.handles); return }
+  }
+  folderInputRef.value?.click()
+}
+
+// ── Core file handler ─────────────────────────────────────────────────────────
+
 const TYPE_LABELS: Record<SpineFileType, string> = {
   'skeleton-json': 'JSON',
   'skeleton-skel': 'SKEL',
@@ -240,13 +388,13 @@ const TYPE_LABELS: Record<SpineFileType, string> = {
   image:           'IMG',
 }
 
-async function handleFiles(files: File[]) {
+async function handleFiles(files: File[], handles?: FileSystemFileHandle[], skipHistory = false) {
   if (files.length === 0) return
   isDragging.value     = false
   classifyError.value  = null
   versionUnknown.value = false
+  reloadHint.value     = []
 
-  // Show file names immediately while classifying
   loaderStore.setPendingFiles(files)
 
   const result = await groupSpineFiles(files)
@@ -260,7 +408,6 @@ async function handleFiles(files: File[]) {
     return
   }
 
-  // Detect version from the first valid slot
   const firstValid = result.slots.find(s => !s.error && s.fileSet)
   let version: string | null = null
   if (firstValid?.fileSet) {
@@ -270,7 +417,6 @@ async function handleFiles(files: File[]) {
       : detectSpineVersionFromSkel(skeleton.fileBody as ArrayBuffer)
   }
 
-  // Run static validation on each slot before storing
   for (const slot of result.slots) {
     if (slot.fileSet) {
       const errs = validateSpineFileSet(slot.fileSet)
@@ -285,6 +431,12 @@ async function handleFiles(files: File[]) {
   } else {
     versionUnknown.value = true
   }
+
+  // Save to history only for manual loads, not session reloads
+  if (!skipHistory && result.slots.some(s => !s.error && !s.validationErrors?.length)) {
+    await saveSession(files.map(f => f.name), handles)
+    historySessions.value = getSessions()
+  }
 }
 
 function autoSelectVersion(version: string) {
@@ -296,13 +448,38 @@ function autoSelectVersion(version: string) {
 
 async function onDrop(e: DragEvent) {
   if (!e.dataTransfer) return
+  // Capture FSAA handle promises synchronously BEFORE any await —
+  // browsers clear DataTransfer.items after the first event-loop tick.
+  const handlePromises: Promise<FileSystemHandle | null>[] = isFileSystemAccessSupported()
+    ? Array.from(e.dataTransfer.items).map(
+        item => ((item as any).getAsFileSystemHandle?.() ?? Promise.resolve(null)) as Promise<FileSystemHandle | null>,
+      )
+    : []
+
   const files = await getFilesFromDataTransfer(e.dataTransfer)
-  await handleFiles(files)
+
+  // Resolve the handles captured synchronously above
+  const handles: FileSystemFileHandle[] = []
+  for (const p of handlePromises) {
+    try {
+      const handle = await p
+      if (handle?.kind === 'file') {
+        handles.push(handle as FileSystemFileHandle)
+      } else if (handle?.kind === 'directory') {
+        for await (const entry of (handle as any).values()) {
+          if (entry.kind === 'file') handles.push(entry as FileSystemFileHandle)
+        }
+      }
+    } catch {}
+  }
+
+  await handleFiles(files, handles.length > 0 ? handles : undefined)
 }
 
 function onFileInput(e: Event) {
   const input = e.target as HTMLInputElement
   if (!input.files) return
+  // No handles available from <input type="file"> — variant A only
   handleFiles(Array.from(input.files))
   input.value = ''
 }
@@ -815,4 +992,205 @@ kbd {
   min-width: 28px;
   white-space: nowrap;
 }
+
+/* ── History sidebar ─────────────────────────────────── */
+
+.history-sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 210px;
+  height: 100vh;
+  background: var(--c-surface);
+  border-right: 1px solid var(--c-border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 10;
+}
+
+.history-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 12px 8px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--c-border-dim);
+}
+
+.history-title {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--c-text-ghost);
+}
+
+.history-clear {
+  background: none;
+  border: none;
+  color: var(--c-text-ghost);
+  cursor: pointer;
+  font-size: 0.65rem;
+  padding: 2px 4px;
+  border-radius: 3px;
+  line-height: 1;
+  transition: color 0.12s, background 0.12s;
+}
+.history-clear:hover { color: var(--c-text-muted); background: var(--c-raised); }
+
+.history-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 0 12px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--c-scroll) transparent;
+}
+.history-list::-webkit-scrollbar { width: 4px; }
+.history-list::-webkit-scrollbar-thumb { background: var(--c-scroll); border-radius: 2px; }
+
+.history-day-sep {
+  height: 1px;
+  background: var(--c-border-dim);
+  margin: 6px 10px;
+}
+
+.history-day-label {
+  font-size: 0.6rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--c-text-ghost);
+  padding: 2px 12px 4px;
+}
+
+.history-session {
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: background 0.1s;
+  position: relative;
+}
+.history-session:hover { background: var(--c-raised); }
+.history-session--loading { opacity: 0.6; pointer-events: none; }
+
+.session-time {
+  font-size: 0.65rem;
+  color: var(--c-text-ghost);
+  font-variant-numeric: tabular-nums;
+  display: block;
+  margin-bottom: 3px;
+}
+
+.session-files {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.session-file {
+  font-size: 0.68rem;
+  color: var(--c-text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 170px;
+}
+
+.session-more {
+  font-size: 0.62rem;
+  color: var(--c-text-ghost);
+}
+
+.session-badge {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-size: 0.75rem;
+  color: #7c6af5;
+  opacity: 0.7;
+}
+
+.session-delete {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  display: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.65rem;
+  color: var(--c-text-ghost);
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+.session-delete:hover { color: var(--c-text); background: rgba(255,255,255,0.08); }
+.history-session:hover .session-delete { display: block; }
+.history-session:hover .session-badge  { display: none; }
+
+.session-loading {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-size: 0.75rem;
+  color: var(--c-text-ghost);
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; }
+  50%       { opacity: 1; }
+}
+
+/* Variant A hint */
+.reload-hint {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border-top: 1px solid var(--c-border-dim);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: rgba(124, 106, 245, 0.06);
+  position: relative;
+}
+
+.reload-hint-title {
+  font-size: 0.62rem;
+  color: var(--c-text-ghost);
+  font-weight: 600;
+}
+
+.reload-hint-file {
+  font-size: 0.65rem;
+  color: var(--c-text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reload-hint-btn {
+  margin-top: 4px;
+  background: rgba(124,106,245,0.15);
+  border: 1px solid rgba(124,106,245,0.3);
+  color: #9d8fff;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.reload-hint-btn:hover { background: rgba(124,106,245,0.25); }
+
+.reload-hint-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  background: none;
+  border: none;
+  color: var(--c-text-ghost);
+  cursor: pointer;
+  font-size: 0.65rem;
+  padding: 2px 4px;
+}
+.reload-hint-close:hover { color: var(--c-text-muted); }
 </style>

@@ -29,6 +29,7 @@
           <li>Spine version is detected automatically from the file header</li>
           <li>Supported image formats: PNG · JPG · WebP · AVIF</li>
           <li>Up to <b>30 skeletons</b> can be loaded at once (use the <b>Spines</b> tab to switch)</li>
+          <li><b>History sidebar</b> — last 20 sessions on the picker page; click to reload automatically (Chrome/Edge) or reopen the folder; per-session delete available on hover</li>
         </ul>
       </section>
 
@@ -57,6 +58,7 @@
           <li><b>Reset view</b> — double-click the canvas</li>
           <li>Toggle <b>origin crosshair</b> in settings (⚙)</li>
           <li>Change <b>background color</b> via the color picker in the bottom-right corner of the canvas</li>
+          <li><b>Placeholder labels</b> — toggle the <code>ph</code> checkbox next to the color picker to show/hide named placeholder overlays; setting is persisted</li>
         </ul>
       </section>
 
@@ -72,7 +74,7 @@
           </div>
           <div class="tab-item">
             <span class="tab-badge">Anim</span>
-            <span>Animation list, tracks, queue, skins, events timeline</span>
+            <span>Animation list (sorted alphabetically; folder opens on hover; selected path stays highlighted), tracks, queue, skins, events timeline</span>
           </div>
           <div class="tab-item">
             <span class="tab-badge">Insp</span>
@@ -95,6 +97,24 @@
             <span>PNG screenshot · Pose JSON · Sprite Sheet · Animated GIF</span>
           </div>
         </div>
+      </section>
+
+      <n-divider class="divider" />
+
+      <!-- Compare Mode -->
+      <section class="help-section">
+        <h3 class="sec-title">Compare Mode</h3>
+        <p class="help-p">Side-by-side visual and structural comparison of two Spine skeletons. Open via <b>⇄ Compare</b> on the picker page or in the viewer toolbar.</p>
+        <ul class="help-list">
+          <li><b>Two canvases</b> side by side with a resizable divider; per-canvas skin and animation selectors</li>
+          <li><b>Time sync</b> (↺) — mirrors playback time from Master to Secondary in real-time</li>
+          <li><b>Viewport sync</b> (⊞) — mirrors pan and zoom between canvases</li>
+          <li><b>Animation / Skin sync</b> — changes on one side auto-apply the same name to the other when sync is on</li>
+          <li><b>Diff panel</b> — runs automatically on load; shows Bones · Slots · Skins · Animations · Events · Constraints</li>
+          <li><b>Reskin Overview</b> — animation presence + duration delta, skin diff, event timing diff, placeholder parameter changes; severity badges: 🔴 critical · 🟠 non-critical</li>
+          <li><b>Placeholder labels</b> — <code>ph</code> checkbox in each canvas overlay; shared with the main viewer setting</li>
+          <li>Diff panel position (left / right / bottom) is persisted</li>
+        </ul>
       </section>
 
       <n-divider class="divider" />

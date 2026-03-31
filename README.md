@@ -8,9 +8,14 @@ Browser-based viewer for [Spine](http://esotericsoftware.com/) skeletal animatio
 
 ### File Loading
 - **Drag & drop** files or folders directly onto the picker page
+- **Choose Files / Choose Folder** buttons with File System Access API support (Chrome / Edge)
 - Automatic Spine version detection from `.json` / `.skel` headers
 - Supports all attachment image formats: PNG, JPG, WebP, AVIF
 - Load **up to 30 skeletons** simultaneously and switch between them
+- **File history sidebar** — last 20 sessions shown on the picker page
+  - One-click auto-reload (Chrome/Edge): files reopen without a picker dialog
+  - Picker opens in the session's original folder as fallback
+  - Per-session delete button; clear all history button
 
 ### Playback
 - **Multi-track** playback (tracks 0–11 simultaneously)
@@ -20,12 +25,19 @@ Browser-based viewer for [Spine](http://esotericsoftware.com/) skeletal animatio
 - **Frame stepping** ±1 frame at 30/60 fps
 - Seek to any position
 
+### Animation Dropdown (Anim tab)
+- Animations and folders sorted **alphabetically**
+- Folder opens on **hover** — no extra click needed
+- Parent folder stays **highlighted** while navigating the submenu
+- Selected animation and its parent folder remain highlighted until a new one is chosen
+
 ### Viewport
 - **Pan** with left mouse drag
 - **Zoom** with scroll wheel (0.05×–20×)
 - Double-click to **reset view**
 - Toggle **origin crosshair** (X/Y center)
 - Change **background color** via color picker
+- **Placeholder labels** toggle (`ph` checkbox) — show/hide named placeholder overlays on canvas; persisted
 
 ### Multi-Skeleton (Spines tab)
 - Load **up to 30 skeletons** in one session
@@ -73,6 +85,36 @@ Browser-based viewer for [Spine](http://esotericsoftware.com/) skeletal animatio
 | **Pose JSON** | Snapshot of all bone transforms |
 | **Sprite Sheet** | N-frame grid as a single PNG |
 | **GIF** | Animated GIF with configurable FPS and quality |
+
+### Compare Mode
+
+Side-by-side visual and structural comparison of two Spine skeletons. Accessible from the picker page and the viewer toolbar.
+
+**Layout**
+- Two independent Pixi canvases rendered side by side with a resizable divider
+- Per-canvas control bar: side badge (A / B), skin selector, animation selector, time, FPS
+- Diff panel with three configurable positions: left, right, bottom (persisted)
+
+**Synchronized Playback**
+- **Time sync** (↺) — mirrors time position in real-time from Master to Secondary
+- **Viewport sync** (⊞) — mirrors pan and zoom between canvases
+- **Animation sync** — changing animation on one side auto-applies the same name to the other (if found)
+- **Skin sync** — skin changes mirrored when sync is enabled
+
+**Diff Panel**
+- Runs automatically when both canvases finish loading — no manual trigger needed
+- Sections: Skeleton meta · Bones · Slots · Skins · Animations · Events · Constraints · IK / Transform / Path constraints
+- **Reskin Overview** (always shown first):
+  - Animation presence + duration delta
+  - Skin presence diff
+  - Event definition presence diff
+  - Per-animation event timing diff (JSON only)
+  - Placeholder slots / bones / attachments with critical parameter change detection
+- Severity badges: 🔴 critical (missing name, missing event, placeholder changed) · 🟠 non-critical (duration delta, timing delta)
+
+**Placeholder Labels**
+- `ph` checkbox in each canvas overlay — show/hide named placeholder overlays
+- Shared setting with the main viewer; persisted
 
 ### Keyboard Shortcuts
 

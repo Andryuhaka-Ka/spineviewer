@@ -51,6 +51,9 @@ function buildLevel(animations: string[], prefix: string): CascaderOption[] {
     })
   }
 
+  leaves.sort((a, b) => String(a.label).localeCompare(String(b.label)))
+  groups.sort((a, b) => String(a.label).localeCompare(String(b.label)))
+
   // Leaves first, then groups — matches typical Spine naming conventions
   return [...leaves, ...groups]
 }
