@@ -48,6 +48,7 @@ function spinePixi7Redirect(): Plugin {
 }
 
 export default defineConfig({
+  base: '/spineviewer/',
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
   },

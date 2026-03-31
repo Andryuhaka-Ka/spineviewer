@@ -357,7 +357,7 @@ async function onCaptureGif(opts: { track: number; fps: number; quality: number 
           gif = new GIF({
             workers:      2,
             quality:      opts.quality,
-            workerScript: '/gif.worker.js',
+            workerScript: `${import.meta.env.BASE_URL}gif.worker.js`,
             width:        canvas.width,
             height:       canvas.height,
             repeat:       0,
