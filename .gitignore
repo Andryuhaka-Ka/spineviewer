@@ -1,4 +1,5 @@
 .idea/
+.serena/
 .claude/
 node_modules/
 dist/
