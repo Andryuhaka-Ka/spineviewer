@@ -10,7 +10,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc && vite build",
+    "build": "vite build && vue-tsc --noEmit",
     "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit"
   },
