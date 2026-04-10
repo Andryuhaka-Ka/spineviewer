@@ -58,7 +58,7 @@
           <li><b>Reset view</b> — double-click the canvas</li>
           <li>Toggle <b>origin crosshair</b> in settings (⚙)</li>
           <li>Change <b>background color</b> via the color picker in the bottom-right corner of the canvas</li>
-          <li><b>Placeholder labels</b> — toggle the <code>ph</code> checkbox next to the color picker to show/hide named placeholder overlays; setting is persisted</li>
+          <li><b>Placeholder labels</b> — toggle the <code>ph</code> checkbox to show/hide named placeholder overlays; expand the list below to enable/disable individual placeholders; toggle state and per-item visibility saved per skeleton</li>
         </ul>
       </section>
 
@@ -70,7 +70,7 @@
         <div class="tab-grid">
           <div class="tab-item">
             <span class="tab-badge">Spines</span>
-            <span>Appears when 2+ skeletons are loaded — lists all slots, click to switch the active skeleton. Each skeleton's viewport, animation, and playback state is saved independently</span>
+            <span>Appears when 2+ skeletons are loaded — click to switch the active skeleton; <b>drag</b> the 6-dot handle to reorder (top = highest z-index on stage); <b>pin</b> (📌) to keep a skeleton visible while browsing others. Viewport, animation, skin, and placeholder state saved per skeleton</span>
           </div>
           <div class="tab-item">
             <span class="tab-badge">Anim</span>
@@ -112,7 +112,7 @@
           <li><b>Animation / Skin sync</b> — changes on one side auto-apply the same name to the other when sync is on</li>
           <li><b>Diff panel</b> — runs automatically on load; shows Bones · Slots · Skins · Animations · Events · Constraints</li>
           <li><b>Reskin Overview</b> — animation presence + duration delta, skin diff, event timing diff, placeholder parameter changes; severity badges: 🔴 critical · 🟠 non-critical</li>
-          <li><b>Placeholder labels</b> — <code>ph</code> checkbox in each canvas overlay; shared with the main viewer setting</li>
+          <li><b>Placeholder labels</b> — <code>ph</code> checkbox per canvas; individual checkboxes for each placeholder (only non-removed ones shown)</li>
           <li>Diff panel position (left / right / bottom) is persisted</li>
         </ul>
       </section>

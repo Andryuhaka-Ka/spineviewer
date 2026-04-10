@@ -10,17 +10,41 @@
   <div class="spines-panel">
     <div class="spines-list">
       <div
-        v-for="slot in loaderStore.spineSlots"
+        v-for="(slot, index) in loaderStore.spineSlots"
         :key="slot.id"
         class="spine-item"
         :class="{
-          'spine-item--active':   slot.id === loaderStore.activeSlotId,
-          'spine-item--error':    !!slot.error,
-          'spine-item--modified': isModified(slot),
+          'spine-item--active':       slot.id === loaderStore.activeSlotId,
+          'spine-item--error':        !!slot.error,
+          'spine-item--modified':     isModified(slot),
+          'spine-item--dragging':     dragSrcIndex === index,
+          'spine-item--drop-top':     dragOverIndex === index && dropPosition === 'top',
+          'spine-item--drop-bottom':  dragOverIndex === index && dropPosition === 'bottom',
         }"
         :title="slot.error ?? slot.name"
+        :draggable="!slot.error"
         @click="!slot.error && loaderStore.setActiveSlot(slot.id)"
+        @dragstart="onDragStart($event, index)"
+        @dragover="onDragOver($event, index)"
+        @dragleave="onDragLeave"
+        @drop="onDrop($event, index)"
+        @dragend="onDragEnd"
       >
+        <span
+          v-if="!slot.error"
+          class="spine-drag-handle"
+          title="Drag to reorder (top = higher z-index)"
+        >
+          <svg width="8" height="12" viewBox="0 0 8 12" fill="currentColor">
+            <circle cx="2" cy="2"  r="1.2"/>
+            <circle cx="6" cy="2"  r="1.2"/>
+            <circle cx="2" cy="6"  r="1.2"/>
+            <circle cx="6" cy="6"  r="1.2"/>
+            <circle cx="2" cy="10" r="1.2"/>
+            <circle cx="6" cy="10" r="1.2"/>
+          </svg>
+        </span>
+        <span v-else class="spine-drag-handle spine-drag-handle--placeholder" />
         <span class="spine-dot" />
         <span class="spine-name">{{ slot.name }}</span>
         <span
@@ -29,6 +53,17 @@
           :title="modifiedHint(slot)"
         />
         <span v-if="slot.error" class="spine-err-badge" :title="slot.error">!</span>
+        <button
+          v-if="!slot.error"
+          class="spine-pin-btn"
+          :class="{ 'spine-pin-btn--pinned': loaderStore.isPinned(slot.id) }"
+          title="Keep on scene when switching"
+          @click.stop="loaderStore.setPinned(slot.id, !loaderStore.isPinned(slot.id))"
+        >
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+            <path d="M17 4h-1V3a1 1 0 0 0-2 0v1H10V3a1 1 0 0 0-2 0v1H7a3 3 0 0 0-2.12 5.12L6 17v.5a.5.5 0 0 0 .5.5H11v2.5a1 1 0 0 0 2 0V18h4.5a.5.5 0 0 0 .5-.5V17l1.12-7.88A3 3 0 0 0 17 4z"/>
+          </svg>
+        </button>
       </div>
     </div>
 
@@ -53,6 +88,51 @@ const viewerStore    = useViewerStore()
 
 const validCount = computed(() => loaderStore.spineSlots.filter(s => !s.error).length)
 const errorCount = computed(() => loaderStore.spineSlots.filter(s =>  s.error).length)
+
+// ── Drag-and-drop reorder ────────────────────────────────────────────────────
+const dragSrcIndex  = ref<number | null>(null)
+const dragOverIndex = ref<number | null>(null)
+/** 'top' = insert before, 'bottom' = insert after */
+const dropPosition  = ref<'top' | 'bottom'>('top')
+
+function onDragStart(e: DragEvent, index: number) {
+  dragSrcIndex.value = index
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', String(index))
+  }
+}
+
+function onDragOver(e: DragEvent, index: number) {
+  e.preventDefault()
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+  dragOverIndex.value = index
+  // Determine whether cursor is in top or bottom half of the element
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  dropPosition.value = (e.clientY - rect.top) < rect.height / 2 ? 'top' : 'bottom'
+}
+
+function onDragLeave() {
+  dragOverIndex.value = null
+}
+
+function onDrop(e: DragEvent, toIndex: number) {
+  e.preventDefault()
+  if (dragSrcIndex.value === null) return
+  let target = toIndex
+  if (dropPosition.value === 'bottom') target = toIndex + 1
+  // Adjust target for removal of source item
+  const src = dragSrcIndex.value
+  if (target > src) target -= 1
+  loaderStore.reorderSlots(src, target)
+  dragSrcIndex.value  = null
+  dragOverIndex.value = null
+}
+
+function onDragEnd() {
+  dragSrcIndex.value  = null
+  dragOverIndex.value = null
+}
 
 /** Returns true if the slot has been changed from its default state. */
 function isModified(slot: SpineSlot): boolean {
@@ -137,13 +217,55 @@ function modifiedHint(slot: SpineSlot): string {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 12px;
+  padding: 6px 12px 6px 8px;
   border-radius: 6px;
   margin: 0 6px 2px;
   cursor: pointer;
   user-select: none;
   transition: background 0.12s;
   min-width: 0;
+  position: relative;
+}
+
+/* Drop indicator lines */
+.spine-item--drop-top::before,
+.spine-item--drop-bottom::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  height: 2px;
+  background: #9d8fff;
+  border-radius: 1px;
+  pointer-events: none;
+}
+.spine-item--drop-top::before  { top: -1px; }
+.spine-item--drop-bottom::after { bottom: -1px; }
+
+.spine-item--dragging {
+  opacity: 0.4;
+}
+
+/* Drag handle */
+.spine-drag-handle {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  color: var(--c-text-ghost);
+  cursor: grab;
+  opacity: 0;
+  transition: opacity 0.12s;
+  padding: 2px 1px;
+}
+.spine-drag-handle--placeholder {
+  width: 10px;
+  cursor: default;
+}
+.spine-item:hover .spine-drag-handle:not(.spine-drag-handle--placeholder) {
+  opacity: 1;
+}
+.spine-drag-handle:active {
+  cursor: grabbing;
 }
 
 .spine-item:hover:not(.spine-item--error) {
@@ -208,6 +330,35 @@ function modifiedHint(slot: SpineSlot): string {
   border-radius: 4px;
   padding: 1px 5px;
   flex-shrink: 0;
+}
+
+.spine-pin-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--c-text-ghost);
+  cursor: pointer;
+  padding: 2px 3px;
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 0.12s, color 0.12s;
+}
+
+.spine-item:hover .spine-pin-btn,
+.spine-pin-btn--pinned {
+  opacity: 1;
+}
+
+.spine-pin-btn--pinned {
+  color: #4ade80;
+}
+
+.spine-pin-btn:hover {
+  background: var(--c-raised);
+  color: var(--c-text-muted);
 }
 
 .spines-footer {

@@ -37,17 +37,22 @@ Browser-based viewer for [Spine](http://esotericsoftware.com/) skeletal animatio
 - Double-click to **reset view**
 - Toggle **origin crosshair** (X/Y center)
 - Change **background color** via color picker
-- **Placeholder labels** toggle (`ph` checkbox) — show/hide named placeholder overlays on canvas; persisted
+- **Placeholder labels** toggle (`ph` checkbox) — show/hide named placeholder overlays on canvas
+  - Individual checkboxes under the `ph` toggle to enable/disable each placeholder separately
+  - Toggle state and per-placeholder visibility saved and restored per skeleton
 
 ### Multi-Skeleton (Spines tab)
 - Load **up to 30 skeletons** in one session
 - **Spines tab** appears automatically when 2+ skeletons are loaded
 - Click any entry to switch the active skeleton
-- Each skeleton's viewport position, animation, and playback state is preserved independently
+- **Drag to reorder** skeletons — higher in the list = higher z-index on the stage (6-dot drag handle)
+- **Pin button** — keep a skeleton on stage while switching to another
+- Each skeleton's viewport position, animation, skin, placeholder toggle, and playback state is preserved independently
 
 ### Skins
-- Single skin selection
+- Single skin selection with **radio buttons** — selection preserved when switching skeletons
 - **Skin Composer** — combine multiple skins into one composite skin
+- First non-default skin auto-applied on initial load
 
 ### Inspector (Insp tab)
 - **Bone hierarchy** — live x, y, rotation, scale values; expandable tree; search
@@ -114,7 +119,8 @@ Side-by-side visual and structural comparison of two Spine skeletons. Accessible
 
 **Placeholder Labels**
 - `ph` checkbox in each canvas overlay — show/hide named placeholder overlays
-- Shared setting with the main viewer; persisted
+- Individual checkboxes for each placeholder (only non-removed ones shown)
+- Shared `disabledPlaceholders` state with the main viewer
 
 ### Keyboard Shortcuts
 
@@ -172,7 +178,10 @@ Output goes to `dist/`.
 6. Explore the other tabs: **Insp**, **Atlas**, **Perf**, **Compl**, **Export**.
 
 ### Multi-Spine Workflow
-When you drop multiple Spine skeletons, all are loaded into slots. The **Spines** tab appears in the viewer — click any entry to switch. Each skeleton's viewport, animation, and playback state is saved independently.
+When you drop multiple Spine skeletons, all are loaded into slots. The **Spines** tab appears in the viewer — click any entry to switch. Each skeleton's viewport, animation, skin, and placeholder state is saved independently.
+
+- **Drag** the 6-dot handle to reorder skeletons — position in the list determines z-order (top = front)
+- **Pin** a skeleton (📌 button) to keep it visible on stage while you browse others
 
 ---
 

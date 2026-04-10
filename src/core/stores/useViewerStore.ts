@@ -20,11 +20,29 @@ export const useViewerStore = defineStore('viewer', () => {
   )
   watch(showPlaceholders, v => localStorage.setItem('svp:viewer:showPlaceholders', String(v)))
 
+  /** Names of placeholders individually hidden by the user */
+  const disabledPlaceholders = ref<Set<string>>(new Set())
+
+  function togglePlaceholder(name: string) {
+    const next = new Set(disabledPlaceholders.value)
+    if (next.has(name)) next.delete(name)
+    else next.add(name)
+    disabledPlaceholders.value = next
+  }
+
+  function clearDisabledPlaceholders() {
+    disabledPlaceholders.value = new Set()
+  }
+
   function resetView() {
     zoom.value = 1
     posX.value = 0
     posY.value = 0
   }
 
-  return { bgColor, zoom, posX, posY, showOrigin, showPlaceholders, resetView }
+  return {
+    bgColor, zoom, posX, posY, showOrigin, showPlaceholders,
+    disabledPlaceholders, togglePlaceholder, clearDisabledPlaceholders,
+    resetView,
+  }
 })

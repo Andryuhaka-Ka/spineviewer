@@ -70,26 +70,47 @@
       </div>
     </Transition>
 
-    <!-- Top-left overlay: bg color + placeholder toggle -->
+    <!-- Top-left overlay: bg color + placeholder toggle + ph list -->
     <div v-if="hasFileSet" class="overlay-tl">
-      <input
-        type="checkbox"
-        class="ph-toggle"
-        :checked="viewerStore.showPlaceholders"
-        title="Show placeholder labels"
-        @change="viewerStore.showPlaceholders = ($event.target as HTMLInputElement).checked"
+      <div class="overlay-tl-row">
+        <input
+          type="checkbox"
+          class="ph-toggle"
+          :checked="viewerStore.showPlaceholders"
+          title="Show placeholder labels"
+          @change="viewerStore.showPlaceholders = ($event.target as HTMLInputElement).checked"
+          @click.stop
+        />
+        <span class="overlay-hint ph-hint">ph</span>
+        <input
+          type="color"
+          class="bg-input"
+          :value="bgColorHex"
+          title="Background color"
+          @input="onBgColorInput"
+          @click.stop
+        />
+        <span class="overlay-hint" title="Double-click canvas to center">bg</span>
+      </div>
+      <div
+        v-if="viewerStore.showPlaceholders && phListItems.length > 0"
+        class="ph-list"
+        @mousedown.stop
         @click.stop
-      />
-      <span class="overlay-hint ph-hint">ph</span>
-      <input
-        type="color"
-        class="bg-input"
-        :value="bgColorHex"
-        title="Background color"
-        @input="onBgColorInput"
-        @click.stop
-      />
-      <span class="overlay-hint" title="Double-click canvas to center">bg</span>
+      >
+        <label
+          v-for="item in phListItems"
+          :key="item.name"
+          class="ph-list-item"
+        >
+          <input
+            type="checkbox"
+            :checked="!viewerStore.disabledPlaceholders.has(item.name)"
+            @change="viewerStore.togglePlaceholder(item.name)"
+          />
+          <span class="ph-list-name">{{ item.name }}</span>
+        </label>
+      </div>
     </div>
 
     <!-- Top-right: FPS -->
@@ -386,16 +407,23 @@ async function loadFileSet(fileSet: FileSet) {
 
 // ── Placeholder label sync ────────────────────────────────────────────────────
 
+// Placeholders present in this slot (status !== 'removed') — shown in the ph-list UI
+const phListItems = computed(() =>
+  (compareStore.diff?.placeholders ?? []).filter(p => p.status !== 'removed'),
+)
+
 // Watch diff to sync placeholder labels with Pixi scene.
 // Also called manually after loadFileSet in case diff didn't change (same diff, new adapter).
 function syncPlaceholderLabels() {
   if (!adapterInst) return
-  const diff = compareStore.diff
-  const raw  = diff?.placeholders ?? []
-
+  const raw = compareStore.diff?.placeholders ?? []
+  // Only items present in this slot and not individually disabled
+  const active = raw.filter(
+    p => p.status !== 'removed' && !viewerStore.disabledPlaceholders.has(p.name),
+  )
   // Both Pixi7 (PIXI.Text) and Pixi8 (PIXI.Sprite) handled entirely inside the adapter.
-  if (raw.length > 0 && viewerStore.showPlaceholders) {
-    adapterInst.setPlaceholderLabels(raw)
+  if (active.length > 0 && viewerStore.showPlaceholders) {
+    adapterInst.setPlaceholderLabels(active)
   } else {
     adapterInst.clearPlaceholderLabels()
   }
@@ -403,6 +431,7 @@ function syncPlaceholderLabels() {
 
 watch(() => compareStore.diff, syncPlaceholderLabels)
 watch(() => viewerStore.showPlaceholders, syncPlaceholderLabels)
+watch(() => viewerStore.disabledPlaceholders, syncPlaceholderLabels)
 
 function updateHighlight() {
   const hl = compareStore.selectedHighlight
@@ -668,14 +697,56 @@ async function onDrop(e: DragEvent) {
   top: 10px;
   left: 10px;
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  pointer-events: all;
+  z-index: 10;
+}
+
+.overlay-tl-row {
+  display: flex;
   align-items: center;
   gap: 5px;
   padding: 3px 7px;
   border-radius: 6px;
   background: rgba(0,0,0,0.45);
   backdrop-filter: blur(4px);
-  pointer-events: all;
-  z-index: 10;
+}
+
+.ph-list {
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+  border-radius: 6px;
+  padding: 4px 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.ph-list-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  font-size: 0.65rem;
+  font-weight: 500;
+}
+
+.ph-list-item input[type='checkbox'] {
+  width: 10px;
+  height: 10px;
+  cursor: pointer;
+  accent-color: #7c6af5;
+  flex-shrink: 0;
+}
+
+.ph-list-name {
+  color: rgba(255, 255, 255, 0.65);
+  user-select: none;
+  white-space: nowrap;
 }
 
 .bg-input {

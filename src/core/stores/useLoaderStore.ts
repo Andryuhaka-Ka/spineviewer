@@ -28,6 +28,8 @@ export const useLoaderStore = defineStore('loader', () => {
   const activeSlotId = ref<string | null>(null)
   /** Spine version detected from the first valid slot's skeleton */
   const detectedVersion = ref<string | null>(null)
+  /** IDs of slots that are pinned on scene (visible even when not active) */
+  const pinnedSlotIds = ref<Set<string>>(new Set())
 
   /** Currently active slot */
   const activeSlot = computed(() =>
@@ -49,11 +51,23 @@ export const useLoaderStore = defineStore('loader', () => {
   const validSlots = computed(() => spineSlots.value.filter(s => !s.error && !(s.validationErrors?.length)))
   const isLoaded = computed(() => validSlots.value.length > 0)
 
+  function setPinned(id: string, pinned: boolean) {
+    const next = new Set(pinnedSlotIds.value)
+    if (pinned) next.add(id)
+    else next.delete(id)
+    pinnedSlotIds.value = next
+  }
+
+  function isPinned(id: string): boolean {
+    return pinnedSlotIds.value.has(id)
+  }
+
   function setPendingFiles(files: File[]) {
     pendingFiles.value    = files
     spineSlots.value      = []
     activeSlotId.value    = null
     detectedVersion.value = null
+    pinnedSlotIds.value   = new Set()
   }
 
   /** Replace all slots; activates the first fully-valid slot. */
@@ -83,6 +97,18 @@ export const useLoaderStore = defineStore('loader', () => {
       const next = spineSlots.value.find(s => !s.error)
       activeSlotId.value = next?.id ?? null
     }
+    // Unpin removed slot
+    const next = new Set(pinnedSlotIds.value)
+    next.delete(id)
+    pinnedSlotIds.value = next
+  }
+
+  function reorderSlots(fromIndex: number, toIndex: number) {
+    if (fromIndex === toIndex) return
+    const arr = [...spineSlots.value]
+    const [item] = arr.splice(fromIndex, 1)
+    arr.splice(toIndex, 0, item)
+    spineSlots.value = arr
   }
 
   function clear() {
@@ -90,6 +116,7 @@ export const useLoaderStore = defineStore('loader', () => {
     spineSlots.value      = []
     activeSlotId.value    = null
     detectedVersion.value = null
+    pinnedSlotIds.value   = new Set()
   }
 
   return {
@@ -103,11 +130,15 @@ export const useLoaderStore = defineStore('loader', () => {
     hasFiles,
     validSlots,
     isLoaded,
+    pinnedSlotIds,
     setPendingFiles,
     setSlots,
     setActiveSlot,
     saveSlotState,
     removeSlot,
     clear,
+    setPinned,
+    isPinned,
+    reorderSlots,
   }
 })

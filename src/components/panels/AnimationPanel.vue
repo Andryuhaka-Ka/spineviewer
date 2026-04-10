@@ -348,16 +348,21 @@ const composerMode  = ref(false)
 const selectedSkin  = ref<string | null>(null)
 const composerSkins = ref(new Set<string>())
 
-watch(() => skeletonStore.skins, (skins) => {
+// Reset UI when skins list changes (spine switch or clear)
+watch(() => skeletonStore.skins, () => {
   composerSkins.value = new Set()
   composerMode.value  = false
-  const firstNonDefault = skins.find(s => s !== 'default') ?? null
-  if (firstNonDefault) {
-    selectedSkin.value = firstNonDefault
-    emit('setSkins', [firstNonDefault])
-  } else {
-    selectedSkin.value = null
-  }
+  selectedSkin.value  = null
+})
+
+// Sync selectedSkin UI whenever PreviewStage changes activeSkins
+// (restoreState / applySkins calls — no async timing issues here)
+watch(() => skeletonStore.activeSkins, (active) => {
+  const valid = active.filter(s => skeletonStore.skins.includes(s))
+  if (valid.length === 0) return
+  selectedSkin.value  = valid.length === 1 ? valid[0] : null
+  composerSkins.value = new Set(valid)
+  if (valid.length > 1) composerMode.value = true
 })
 
 function onToggleComposer() {
@@ -380,6 +385,7 @@ function onSkinRowClick(skin: string) {
 
 function onSingleSkinSelect(skin: string) {
   selectedSkin.value = skin
+  skeletonStore.activeSkins = [skin]
   emit('setSkins', [skin])
 }
 
@@ -388,6 +394,7 @@ function toggleComposerSkin(skin: string, checked: boolean) {
   if (checked) next.add(skin)
   else next.delete(skin)
   composerSkins.value = next
+  skeletonStore.activeSkins = [...next]
   emit('setSkins', [...next])
 }
 

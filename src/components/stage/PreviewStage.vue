@@ -45,7 +45,7 @@
       }"
     />
 
-    <!-- Top-left overlay: origin toggle + bg color picker -->
+    <!-- Top-left overlay: origin toggle + bg color picker + ph list -->
     <div class="overlay-top-left">
       <div class="origin-toggle">
         <input
@@ -70,6 +70,20 @@
           @input="onBgColorInput"
         />
         <span class="bg-color-label">bg</span>
+      </div>
+      <div v-if="viewerStore.showPlaceholders && phItems.length > 0" class="ph-list">
+        <label
+          v-for="item in phItems"
+          :key="item.name"
+          class="ph-list-item"
+        >
+          <input
+            type="checkbox"
+            :checked="!viewerStore.disabledPlaceholders.has(item.name)"
+            @change="viewerStore.togglePlaceholder(item.name)"
+          />
+          <span class="ph-list-name">{{ item.name }}</span>
+        </label>
       </div>
     </div>
 
@@ -189,15 +203,30 @@ const fpsClass = computed(() => {
 
 let pixiApp: IPixiApp | null = null
 let spineAdapter: ISpineAdapter | null = null
+// All currently mounted adapters (active + pinned non-active), keyed by slotId
+const mountedAdapters = new Map<string, ISpineAdapter>()
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mountedSpineObjects = new Map<string, any>()
 
-// Cached placeholder items — used to re-apply when toggle is turned back on
-let _phItems: Array<{ name: string; kind: 'bone' | 'slot' | 'attachment' }> = []
+/** Reactive list of placeholder items in the currently loaded spine */
+const phItems = ref<Array<{ name: string; kind: 'bone' | 'slot' | 'attachment' }>>([])
 
-watch(() => viewerStore.showPlaceholders, (show) => {
+/** Placeholder items that are currently enabled (not individually hidden) */
+const activePHItems = computed(() =>
+  phItems.value.filter(i => !viewerStore.disabledPlaceholders.has(i.name)),
+)
+
+function applyPlaceholderLabels() {
   if (!spineAdapter) return
-  if (show && _phItems.length > 0) spineAdapter.setPlaceholderLabels(_phItems)
-  else spineAdapter.clearPlaceholderLabels()
-})
+  if (viewerStore.showPlaceholders && activePHItems.value.length > 0) {
+    spineAdapter.setPlaceholderLabels(activePHItems.value)
+  } else {
+    spineAdapter.clearPlaceholderLabels()
+  }
+}
+
+watch(() => viewerStore.showPlaceholders, applyPlaceholderLabels)
+watch(() => viewerStore.disabledPlaceholders, applyPlaceholderLabels)
 
 // ── Viewport ──────────────────────────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -315,10 +344,43 @@ const isPanning = ref(false)
 let panStart = { x: 0, y: 0, px: 0, py: 0 }
 
 function applyViewport() {
-  if (!spineObj) return
-  spineObj.x = baseX.value + viewerStore.posX
-  spineObj.y = baseY.value + viewerStore.posY
-  spineObj.scale.set(viewerStore.zoom)
+  const x = baseX.value + viewerStore.posX
+  const y = baseY.value + viewerStore.posY
+  const z = viewerStore.zoom
+  for (const obj of mountedSpineObjects.values()) {
+    obj.x = x
+    obj.y = y
+    obj.scale.set(z)
+  }
+}
+
+/** Apply skins directly to the active spineAdapter.
+ *  Uses activeSkins from store if set (restored from savedState),
+ *  otherwise falls back to the first non-default skin. */
+function applySkins() {
+  if (!spineAdapter) return
+  const stored = skeletonStore.activeSkins
+  const toApply = stored.length > 0
+    ? [...stored]
+    : (() => {
+        const first = spineAdapter!.skins.find((s: string) => s !== 'default')
+        return first ? [first] : []
+      })()
+  if (toApply.length === 0) return
+  spineAdapter.setSkins(toApply)
+  if (stored.length === 0) skeletonStore.activeSkins = toApply
+}
+
+/** Sync Pixi stage zIndex of all mounted spines based on list order.
+ *  Slot at list index 0 (top of UI) gets the highest zIndex (rendered on top). */
+function syncZOrder() {
+  if (!pixiApp) return
+  const slots = loaderStore.spineSlots
+  const n = slots.length
+  slots.forEach((slot, i) => {
+    const obj = mountedSpineObjects.get(slot.id)
+    if (obj) obj.zIndex = n - 1 - i
+  })
 }
 
 function onWheel(e: WheelEvent) {
@@ -395,8 +457,16 @@ onMounted(async () => {
       Math.max(height, 1),
     )
 
+    // Enable zIndex-based sorting on the stage for spine z-order control
+    ;(pixiApp.stage as any).sortableChildren = true
+
     trackOverlay = pixiApp.createTrackOverlay()
     trackOverlay.resize(width, height)
+    // Keep the track overlay text above all spine objects
+    const stageChildren = (pixiApp.stage as any).children as any[]
+    if (stageChildren.length > 0) {
+      stageChildren[stageChildren.length - 1].zIndex = 10000
+    }
 
     lastFrameTs = lastInspectorTs = performance.now()
     tickerFn = () => {
@@ -585,7 +655,8 @@ onMounted(async () => {
       () => loaderStore.activeSlotId,
       async (newId, oldId) => {
         if (!newId || newId === oldId || loading.value) return
-        // Save full state of the slot we're leaving
+
+        // 1. Save full state of the slot we're leaving
         if (oldId) {
           loaderStore.saveSlotState(oldId, {
             speed:              animationStore.speed,
@@ -596,44 +667,198 @@ onMounted(async () => {
             currentTrack:       animationStore.currentTrack,
             loop:               animationStore.loop,
             trackEnabled:       { ...animationStore.trackEnabled },
-            trackPlaylists:     JSON.parse(JSON.stringify(animationStore.trackPlaylists)),
-            wasPlaying:         animationStore.isPlaying,
+            trackPlaylists:       JSON.parse(JSON.stringify(animationStore.trackPlaylists)),
+            wasPlaying:           animationStore.isPlaying,
+            selectedSkins:        [...skeletonStore.activeSkins],
+            showPlaceholders:     viewerStore.showPlaceholders,
+            disabledPlaceholders: [...viewerStore.disabledPlaceholders],
           })
         }
-        // Load the new slot
+
+        // 2. Handle old active adapter: park (if pinned) or destroy
+        if (oldId && spineAdapter) {
+          if (loaderStore.isPinned(oldId)) {
+            // Park: keep on stage, freeze/play based on wasPlaying
+            const ss = loaderStore.spineSlots.find(s => s.id === oldId)?.savedState
+            spineAdapter.setTimeScale(ss?.wasPlaying ? (ss.speed ?? 1) : 0)
+          } else {
+            spineAdapter.destroy()
+            mountedAdapters.delete(oldId)
+            mountedSpineObjects.delete(oldId)
+          }
+          spineAdapter = null
+          spineObj = null
+        }
+
+        // 3. Clear active-specific stores
+        skeletonStore.clear()
+        animationStore.reset()
+        inspectorStore.clear()
+        eventsStore.clear()
+        atlasStore.clear()
+        profilerStore.clear()
+        complexityStore.clear()
+        phItems.value = []
+        viewerStore.showPlaceholders = localStorage.getItem('svp:viewer:showPlaceholders') !== 'false'
+        viewerStore.clearDisabledPlaceholders()
+        spineLoaded.value = false
+
+        // 4. Get the new slot
         const slot = loaderStore.spineSlots.find(s => s.id === newId)
-        if (slot?.fileSet) {
-          await loadSpine(slot.fileSet)
-          const s = slot.savedState
-          if (s) {
-            // Restore viewport
-            viewerStore.posX = s.posX
-            viewerStore.posY = s.posY
-            viewerStore.zoom = s.zoom
+        if (!slot?.fileSet) return
+
+        // Helper: restore saved state into active stores + viewport
+        const restoreState = (s: typeof slot.savedState) => {
+          if (!s) return
+          viewerStore.posX = s.posX
+          viewerStore.posY = s.posY
+          viewerStore.zoom = s.zoom
+          applyViewport()
+          animationStore.speed              = s.speed
+          animationStore.selectedAnimation  = s.selectedAnimation
+          animationStore.currentTrack       = s.currentTrack
+          animationStore.loop               = s.loop
+          animationStore.trackEnabled       = { ...s.trackEnabled }
+          for (const [idxStr, playlist] of Object.entries(s.trackPlaylists)) {
+            animationStore.setTrackPlaylist(Number(idxStr), playlist)
+          }
+          if (s.wasPlaying) {
+            animationStore.isPaused = false
+            animationStore.play()
+          }
+          // Restore selected skins — must be set before Vue flushes so AnimationPanel
+          // watch(skins) picks them up instead of falling back to firstNonDefault
+          if (s.selectedSkins?.length) {
+            skeletonStore.activeSkins = [...s.selectedSkins]
+          }
+          // Restore placeholder toggle state
+          if (s.showPlaceholders !== undefined) {
+            viewerStore.showPlaceholders = s.showPlaceholders
+          }
+          // Restore individually disabled placeholders
+          if (s.disabledPlaceholders?.length) {
+            viewerStore.disabledPlaceholders = new Set(s.disabledPlaceholders)
+          }
+        }
+
+        // 5a. New slot is already mounted (was pinned on scene) → reuse adapter
+        if (mountedAdapters.has(newId)) {
+          loading.value = true
+          try {
+            spineAdapter = mountedAdapters.get(newId)!
+            spineObj = mountedSpineObjects.get(newId) ?? null
+            spineLoaded.value = true
+
+            skeletonStore.attachAdapter(spineAdapter)
+            skeletonStore.populate({
+              animations: spineAdapter.animations,
+              skins:      spineAdapter.skins,
+              bones:      spineAdapter.bones,
+              slots:      spineAdapter.slots,
+              events:     spineAdapter.events,
+              freeBones:  spineAdapter.getFreeBones(),
+            })
+            spineAdapter.onEvent(e => eventsStore.push(e))
+            if (typeof slot.fileSet.atlas.fileBody === 'string') {
+              atlasStore.load(slot.fileSet.atlas.fileBody, slot.fileSet.images)
+            }
+            complexityStore.analyze(spineAdapter, slot.fileSet, atlasStore.pages)
+            // Re-populate ph-list (was cleared in step 3; loadSpine not called in this path)
+            const PH_RE_5A = /placeholder/i
+            const phSlots5A = new Set(spineAdapter.slots.filter(s => PH_RE_5A.test(s.name)).map(s => s.name))
+            phItems.value = [
+              ...[...phSlots5A].map(name => ({ name, kind: 'slot' as const })),
+              ...spineAdapter.bones
+                .filter(b => PH_RE_5A.test(b.name) && !phSlots5A.has(b.name))
+                .map(b => ({ name: b.name, kind: 'bone' as const })),
+            ]
+            restoreState(slot.savedState)
+            applySkins()
+            applyPlaceholderLabels()
+          } catch (e) {
+            spineError.value = e instanceof Error ? e.message : 'Failed to restore spine'
+            console.error('[PreviewStage] restore pinned error:', e)
+          } finally {
+            loading.value = false
+          }
+        } else {
+          // 5b. Load fresh
+          await loadSpine(slot.fileSet, newId)
+          restoreState(slot.savedState)
+          applySkins()
+          applyPlaceholderLabels()
+        }
+      },
+    )
+
+    // Watch for pin state changes — mount or unmount non-active pinned spines
+    watch(
+      () => loaderStore.pinnedSlotIds,
+      async (newPinned) => {
+        if (!pixiApp) return
+
+        // Un-pinned non-active slots → destroy and remove from scene
+        for (const [slotId, adapter] of [...mountedAdapters.entries()]) {
+          if (slotId === loaderStore.activeSlotId) continue
+          if (!newPinned.has(slotId)) {
+            adapter.destroy()
+            mountedAdapters.delete(slotId)
+            mountedSpineObjects.delete(slotId)
+          }
+        }
+
+        // Newly pinned non-active slots → load and mount them
+        for (const slotId of newPinned) {
+          if (slotId === loaderStore.activeSlotId) continue
+          if (mountedAdapters.has(slotId)) continue
+          const slot = loaderStore.spineSlots.find(s => s.id === slotId)
+          if (!slot?.fileSet) continue
+          try {
+            const adapter = await createSpineAdapter(
+              versionStore.pixiVersion!,
+              versionStore.spineVersion!,
+            )
+            await adapter.load(slot.fileSet)
+            adapter.mount(pixiApp.stage)
+            // Restore animations from saved playlists
+            const ss = slot.savedState
+            if (ss) {
+              for (const [idxStr, playlist] of Object.entries(ss.trackPlaylists)) {
+                const trackIdx = Number(idxStr)
+                if (playlist.length > 0) {
+                  adapter.setAnimation(trackIdx, playlist[0].animationName, playlist[0].loop)
+                  for (let i = 1; i < playlist.length; i++) {
+                    adapter.addAnimation(trackIdx, playlist[i].animationName, playlist[i].loop)
+                  }
+                }
+              }
+              adapter.setTimeScale(ss.wasPlaying ? ss.speed : 0)
+            }
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const obj = (pixiApp.stage as any).children?.at(-1) ?? null
+            mountedAdapters.set(slotId, adapter)
+            if (obj) mountedSpineObjects.set(slotId, obj)
             applyViewport()
-            // Restore animation controls
-            animationStore.speed              = s.speed
-            animationStore.selectedAnimation  = s.selectedAnimation
-            animationStore.currentTrack       = s.currentTrack
-            animationStore.loop               = s.loop
-            animationStore.trackEnabled       = { ...s.trackEnabled }
-            // Restore playlists
-            for (const [idxStr, playlist] of Object.entries(s.trackPlaylists)) {
-              animationStore.setTrackPlaylist(Number(idxStr), playlist)
-            }
-            // Resume playback if it was running
-            if (s.wasPlaying) {
-              animationStore.isPaused = false
-              animationStore.play()
-            }
+            syncZOrder()
+          } catch (e) {
+            console.error('[PreviewStage] failed to mount pinned spine:', slotId, e)
+            loaderStore.setPinned(slotId, false)
           }
         }
       },
     )
 
+    // Watch for slot order changes → sync z-order of stage objects
+    watch(
+      () => loaderStore.spineSlots.map(s => s.id),
+      () => syncZOrder(),
+      { deep: false },
+    )
+
     // Auto-load if files were pre-loaded from version picker
     if (loaderStore.activeSlot?.fileSet) {
-      await loadSpine(loaderStore.activeSlot.fileSet)
+      await loadSpine(loaderStore.activeSlot.fileSet, loaderStore.activeSlotId ?? undefined)
+      applySkins()
     }
   } catch (e) {
     console.error('[PreviewStage] init error:', e)
@@ -648,10 +873,15 @@ onUnmounted(() => {
   spineObj = null
   if (pixiApp && tickerFn) pixiApp.ticker.remove(tickerFn)
   trackOverlay?.destroy()
-  spineAdapter?.destroy()
+  // Destroy all mounted adapters (active + pinned non-active)
+  for (const adapter of mountedAdapters.values()) {
+    adapter.destroy()
+  }
+  mountedAdapters.clear()
+  mountedSpineObjects.clear()
+  spineAdapter = null
   pixiApp?.destroy()
   pixiApp = null
-  spineAdapter = null
   trackOverlay = null
   inspectorStore.clear()
   eventsStore.clear()
@@ -707,17 +937,23 @@ function onProgressDragStart(e: MouseEvent, trackIndex: number) {
 
 // ── Public API ───────────────────────────────────────────────────────────────
 
-async function loadSpine(fileSet: FileSet): Promise<void> {
+async function loadSpine(fileSet: FileSet, slotId?: string): Promise<void> {
   if (!pixiApp) return
   spineError.value = null
 
   _dcRaw.fill(null)
   dcByTime.value = [..._dcRaw]
 
-  // Destroy previous adapter
+  // Destroy previous ACTIVE adapter only (pinned non-active adapters stay mounted)
   if (spineAdapter) {
+    const oldSlotId = [...mountedAdapters.entries()].find(([, a]) => a === spineAdapter)?.[0]
+    if (oldSlotId) {
+      mountedAdapters.delete(oldSlotId)
+      mountedSpineObjects.delete(oldSlotId)
+    }
     spineAdapter.destroy()
     spineAdapter = null
+    spineObj = null
     skeletonStore.clear()
     animationStore.reset()
     inspectorStore.clear()
@@ -751,7 +987,15 @@ async function loadSpine(fileSet: FileSet): Promise<void> {
     baseY.value = height * 0.5
     spineLoaded.value = true
     viewerStore.resetView()
+
+    // Track in maps
+    if (slotId) {
+      mountedAdapters.set(slotId, spineAdapter)
+      if (spineObj) mountedSpineObjects.set(slotId, spineObj)
+    }
+
     applyViewport()
+    syncZOrder()
 
     // Fill skeleton store
     skeletonStore.attachAdapter(spineAdapter)
@@ -768,14 +1012,15 @@ async function loadSpine(fileSet: FileSet): Promise<void> {
     // Prefer slot over bone when both share the same name (slot has its own container)
     const PH_RE = /placeholder/i
     const phSlotNames = new Set(spineAdapter.slots.filter(s => PH_RE.test(s.name)).map(s => s.name))
-    const phItems: Array<{ name: string; kind: 'bone' | 'slot' | 'attachment' }> = [
+    phItems.value = [
       ...[...phSlotNames].map(name => ({ name, kind: 'slot' as const })),
       ...spineAdapter.bones
         .filter(b => PH_RE.test(b.name) && !phSlotNames.has(b.name))
         .map(b => ({ name: b.name, kind: 'bone' as const })),
     ]
-    _phItems = phItems
-    if (phItems.length > 0 && viewerStore.showPlaceholders) spineAdapter.setPlaceholderLabels(phItems)
+    if (phItems.value.length > 0 && viewerStore.showPlaceholders) {
+      spineAdapter.setPlaceholderLabels(phItems.value)
+    }
 
     // Subscribe to Spine events (unsubscribed automatically via spineAdapter.destroy())
     spineAdapter.onEvent(e => eventsStore.push(e))
@@ -935,6 +1180,10 @@ defineExpose({
   top: 10px;
   left: 12px;
   pointer-events: all;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
 }
 
 .origin-toggle {
@@ -1000,6 +1249,41 @@ defineExpose({
   color: rgba(255,255,255,0.45);
   font-size: inherit;
   user-select: none;
+}
+
+.ph-list {
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  border-radius: 6px;
+  padding: 4px 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.ph-list-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  font-size: 0.68rem;
+  font-weight: 500;
+}
+
+.ph-list-item input[type='checkbox'] {
+  width: 10px;
+  height: 10px;
+  cursor: pointer;
+  accent-color: #7c6af5;
+  flex-shrink: 0;
+}
+
+.ph-list-name {
+  color: rgba(255, 255, 255, 0.65);
+  user-select: none;
+  white-space: nowrap;
 }
 
 .overlay-top-right {
