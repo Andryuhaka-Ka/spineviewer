@@ -412,9 +412,9 @@ onMounted(async () => {
         animationStore.setTracks(states)
         trackOverlay?.updateText('')
 
-        // Keep disabled looped tracks frozen even after queue advances (new entry resets timeScale=1)
+        // Keep disabled tracks frozen — applies to both looped and non-looped
         for (const state of states) {
-          if (!animationStore.isTrackEnabled(state.trackIndex) && state.loop && state.timeScale !== 0) {
+          if (!animationStore.isTrackEnabled(state.trackIndex) && state.timeScale !== 0) {
             spineAdapter.setTrackTimeScale(state.trackIndex, 0)
           }
         }
@@ -516,15 +516,14 @@ onMounted(async () => {
       },
     )
 
-    // When a looped track is enabled/disabled during playback — freeze or resume it
+    // When any track is enabled/disabled during playback — freeze or resume it
     watch(
       () => animationStore.trackEnabled,
       (enabledMap) => {
         if (!spineAdapter || !animationStore.isPlaying) return
         for (const track of animationStore.tracks) {
-          if (!track.loop) continue
           const enabled = enabledMap[track.trackIndex] !== false
-          spineAdapter.setTrackTimeScale(track.trackIndex, enabled ? 1 : 0)
+          spineAdapter.setTrackTimeScale(track.trackIndex, enabled ? animationStore.speed : 0)
         }
       },
       { deep: true },
@@ -555,9 +554,9 @@ onMounted(async () => {
           }
           animationStore.isPaused = false
           spineAdapter.setTimeScale(animationStore.speed)
-          // Re-apply freeze for disabled looped tracks
+          // Re-apply freeze for all disabled tracks
           for (const t of animationStore.tracks) {
-            if (t.loop && !animationStore.isTrackEnabled(t.trackIndex)) {
+            if (!animationStore.isTrackEnabled(t.trackIndex)) {
               spineAdapter.setTrackTimeScale(t.trackIndex, 0)
             }
           }

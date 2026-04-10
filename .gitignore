@@ -5,6 +5,7 @@ node_modules/
 dist/
 errors/
 example/
+anotherProject/
 .DS_Store
 *.local
 

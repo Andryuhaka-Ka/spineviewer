@@ -116,11 +116,6 @@ export abstract class BasePixi7Adapter implements ISpineAdapter {
     const stage = container as PIXI.Container
     this._container = stage
     stage.addChild(this._spine)
-
-    // Start first animation
-    if (this.animations.length > 0) {
-      this._spine.state.setAnimation(0, this.animations[0], true)
-    }
   }
 
   // ── Destroy ─────────────────────────────────────────────────────────────────

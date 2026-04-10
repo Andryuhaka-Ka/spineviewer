@@ -129,10 +129,6 @@ export default class Spine42Adapter implements ISpineAdapter {
     const stage = container as any
     this._container = stage
     stage.addChild(this._spine)
-
-    if (this.animations.length > 0) {
-      this._spine.state.setAnimation(0, this.animations[0], true)
-    }
   }
 
   // ── Destroy ────────────────────────────────────────────────────────────────

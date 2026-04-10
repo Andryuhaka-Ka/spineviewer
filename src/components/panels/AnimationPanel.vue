@@ -206,13 +206,19 @@
 
         <!-- Currently playing entry -->
         <div class="track-entry track-entry--current">
-          <span class="entry-icon">▶</span>
+          <button
+            class="track-play-btn"
+            :title="isTrackPlaying(track.trackIndex) ? 'Pause track' : 'Play track'"
+            @click.stop="toggleTrackPlay(track.trackIndex)"
+          >
+            <span class="entry-icon">{{ isTrackPlaying(track.trackIndex) ? '⏸' : '▶' }}</span>
+          </button>
+          <span class="entry-name">{{ track.animationName }}</span>
           <button class="copy-btn" title="Copy name" @click.stop="copyName(track.animationName)">
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
             </svg>
           </button>
-          <span class="entry-name">{{ track.animationName }}</span>
         </div>
 
         <!-- Queued entries -->
@@ -222,15 +228,15 @@
           class="track-entry track-entry--queued"
         >
           <span class="entry-icon">⏭</span>
+          <span class="entry-name">{{ entry.animationName }}</span>
           <button class="copy-btn" title="Copy name" @click.stop="copyName(entry.animationName)">
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
             </svg>
           </button>
-          <span class="entry-name">{{ entry.animationName }}</span>
           <n-button
             size="tiny"
-            style="margin-left: auto; flex-shrink: 0"
+            style="flex-shrink: 0"
             @click="emit('removeQueueEntry', track.trackIndex, i)"
           >✕</n-button>
         </div>
@@ -387,6 +393,21 @@ function toggleComposerSkin(skin: string, checked: boolean) {
 
 function copyName(name: string) {
   navigator.clipboard.writeText(name).catch(() => {})
+}
+
+function isTrackPlaying(trackIndex: number): boolean {
+  return animationStore.isPlaying && animationStore.isTrackEnabled(trackIndex)
+}
+
+function toggleTrackPlay(trackIndex: number) {
+  if (isTrackPlaying(trackIndex)) {
+    animationStore.setTrackEnabled(trackIndex, false)
+  } else {
+    animationStore.setTrackEnabled(trackIndex, true)
+    if (!animationStore.isPlaying) {
+      animationStore.play()
+    }
+  }
 }
 
 const cascaderOptions = computed<CascaderOption[]>(() =>
@@ -679,9 +700,26 @@ function onCascaderSelect(value: string | number | Array<string | number> | null
   font-size: 0.6rem;
   color: var(--c-text-ghost);
   flex-shrink: 0;
-  width: 12px;
   text-align: center;
+  line-height: 1;
 }
+
+.track-play-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 1px 3px;
+  border-radius: 3px;
+  transition: background 0.12s, color 0.12s;
+  width: 18px;
+}
+
+.track-play-btn:hover { background: var(--c-raised); }
+.track-play-btn:hover .entry-icon { color: var(--c-text-dim); }
 
 .entry-name {
   flex: 1;
