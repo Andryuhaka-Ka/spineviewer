@@ -3,6 +3,7 @@
 .claude/
 node_modules/
 dist/
+docs/
 errors/
 example/
 anotherProject/
