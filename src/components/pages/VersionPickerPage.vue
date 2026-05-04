@@ -51,8 +51,8 @@
       <div v-if="reloadHint.length > 0" class="reload-hint">
         <span class="reload-hint-title">Open these files again:</span>
         <span v-for="name in reloadHint" :key="name" class="reload-hint-file">{{ name }}</span>
-        <button class="reload-hint-btn" @click="fileInputRef?.click(); reloadHint = []">Choose files</button>
-        <button class="reload-hint-close" @click="reloadHint = []">✕</button>
+        <button class="reload-hint-btn" @click="fileInputRef?.click(); clearReloadHint()">Choose files</button>
+        <button class="reload-hint-close" @click="clearReloadHint()">✕</button>
       </div>
     </aside>
 
@@ -116,26 +116,26 @@
         class="drop-zone"
         :class="{
           'drop-zone--over':      isDragging,
-          'drop-zone--ok':        loaderStore.isLoaded,
+          'drop-zone--ok':        fileLoaderStore.isLoaded,
           'drop-zone--error':     !!classifyError,
         }"
         @dragover.prevent="isDragging = true"
         @dragleave.prevent="isDragging = false"
         @drop.prevent="onDrop"
       >
-        <template v-if="loaderStore.spineSlots.length > 0 && (loaderStore.isLoaded || loaderStore.spineSlots.some(s => s.error || s.validationErrors?.length))">
-          <span class="drop-state-icon" :class="{ 'drop-state-icon--warn': loaderStore.spineSlots.some(s => s.error || s.validationErrors?.length) }">
-            {{ loaderStore.validSlots.length > 0 ? '✓' : '!' }}
+        <template v-if="fileLoaderStore.spineSlots.length > 0 && (fileLoaderStore.isLoaded || fileLoaderStore.spineSlots.some(s => s.error || s.validationErrors?.length))">
+          <span class="drop-state-icon" :class="{ 'drop-state-icon--warn': fileLoaderStore.spineSlots.some(s => s.error || s.validationErrors?.length) }">
+            {{ fileLoaderStore.validSlots.length > 0 ? '✓' : '!' }}
           </span>
-          <p class="drop-text-ok" :class="{ 'drop-text-warn': loaderStore.validSlots.length === 0 }">
-            <template v-if="loaderStore.validSlots.length > 0">
-              {{ loaderStore.validSlots.length }}
-              spine{{ loaderStore.validSlots.length !== 1 ? 's' : '' }} ready
+          <p class="drop-text-ok" :class="{ 'drop-text-warn': fileLoaderStore.validSlots.length === 0 }">
+            <template v-if="fileLoaderStore.validSlots.length > 0">
+              {{ fileLoaderStore.validSlots.length }}
+              spine{{ fileLoaderStore.validSlots.length !== 1 ? 's' : '' }} ready
             </template>
             <template v-else>No valid spines</template>
-            <template v-if="loaderStore.spineSlots.some(s => s.error || s.validationErrors?.length)">
+            <template v-if="fileLoaderStore.spineSlots.some(s => s.error || s.validationErrors?.length)">
               &middot;
-              {{ loaderStore.spineSlots.filter(s => s.error || s.validationErrors?.length).length }}
+              {{ fileLoaderStore.spineSlots.filter(s => s.error || s.validationErrors?.length).length }}
               invalid
             </template>
           </p>
@@ -155,11 +155,11 @@
 
       <!-- Per-spine validation list -->
       <div
-        v-if="loaderStore.spineSlots.length > 0 && loaderStore.spineSlots.some(s => s.error || s.validationErrors?.length)"
+        v-if="fileLoaderStore.spineSlots.length > 0 && fileLoaderStore.spineSlots.some(s => s.error || s.validationErrors?.length)"
         class="spine-validation-list"
       >
         <div
-          v-for="slot in loaderStore.spineSlots"
+          v-for="slot in fileLoaderStore.spineSlots"
           :key="slot.id"
           class="spine-vrow"
           :class="(slot.error || slot.validationErrors?.length) ? 'spine-vrow--err' : 'spine-vrow--ok'"
@@ -181,7 +181,7 @@
         <n-button size="small" ghost @click="onChooseFiles">Choose files</n-button>
         <n-button size="small" ghost @click="onChooseFolder">Choose folder</n-button>
         <n-button
-          v-if="loaderStore.hasFiles"
+          v-if="fileLoaderStore.hasFiles"
           size="small"
           @click="onClear"
         >Clear</n-button>
@@ -202,9 +202,9 @@
         />
       </div>
 
-      <div v-if="loaderStore.pendingFileInfos.length > 0" class="file-list">
+      <div v-if="fileLoaderStore.pendingFileInfos.length > 0" class="file-list">
         <div
-          v-for="info in loaderStore.pendingFileInfos"
+          v-for="info in fileLoaderStore.pendingFileInfos"
           :key="info.name"
           class="file-row"
         >
@@ -222,7 +222,7 @@
         type="primary"
         size="large"
         class="open-btn"
-        :disabled="!store.isReady || !loaderStore.isLoaded"
+        :disabled="!store.isReady || !fileLoaderStore.isLoaded"
         @click="emit('open')"
       >
         Open Viewer
@@ -256,262 +256,39 @@
 </template>
 
 <script setup lang="ts">
-import { useVersionStore, type PixiVersion, type SpineVersion } from '@/core/stores/useVersionStore'
-import { useLoaderStore } from '@/core/stores/useLoaderStore'
-import { groupSpineFiles, getFilesFromDataTransfer } from '@/core/utils/fileLoader'
-import { detectSpineVersion, detectSpineVersionFromSkel } from '@/core/utils/versionDetector'
-import { validateSpineFileSet } from '@/core/utils/spineValidator'
-import {
-  saveSession, getSessions, reloadSession, getSessionHandles, deleteSession, clearHistory,
-  isFileSystemAccessSupported, pickFilesViaFSAA, pickFolderViaFSAA,
-  type HistorySession,
-} from '@/core/utils/fileHistory'
+import { useVersionStore, type PixiVersion } from '@/core/stores/useVersionStore'
+import { useFileLoaderStore } from '@/core/stores/useFileLoaderStore'
+import { useFilePickerLogic, TYPE_LABELS, formatSize } from '@/core/composables/useFilePickerLogic'
+import { usePickerHistory as _usePickerHistory } from '@/core/composables/usePickerHistory'
 import SettingsPopover from '@/components/ui/SettingsPopover.vue'
 import HelpModal from '@/components/ui/HelpModal.vue'
-import type { SpineFileType } from '@/core/types/FileSet'
 
 const emit = defineEmits<{
-  open:         []
+  open:           []
   'open-compare': [payload: { left?: number; right?: number }]
 }>()
 
 const appVersion = __APP_VERSION__
 
-const store       = useVersionStore()
-const loaderStore = useLoaderStore()
+const store           = useVersionStore()
+const fileLoaderStore = useFileLoaderStore()
 
-const isDragging       = ref(false)
-const classifyError    = ref<string | null>(null)
-const versionUnknown   = ref(false)
-const fileInputRef     = ref<HTMLInputElement | null>(null)
-const folderInputRef   = ref<HTMLInputElement | null>(null)
+// Forward-reference pattern: picker is created first; history callback captures `history` by closure.
+// By the time any user interaction triggers onHistorySaved(), history is fully initialised.
+const picker  = useFilePickerLogic(emit, () => history.refresh())
+const history = _usePickerHistory(picker.handleFiles, () => emit('open'))
 
-// ── File history state ────────────────────────────────────────────────────────
+const {
+  isDragging, classifyError, versionUnknown,
+  fileInputRef, folderInputRef,
+  onDrop, onChooseFiles, onChooseFolder, onFileInput, onClear, onOpenCompare,
+} = picker
 
-const historySessions  = ref<HistorySession[]>(getSessions())
-const reloadingId      = ref<string | null>(null)
-const reloadHint       = ref<string[]>([])
-const hintStartHandle  = ref<FileSystemHandle | null>(null)
-
-const groupedHistory = computed(() => {
-  const groups = new Map<string, HistorySession[]>()
-  for (const s of historySessions.value) {
-    const key = new Date(s.timestamp).toDateString()
-    if (!groups.has(key)) groups.set(key, [])
-    groups.get(key)!.push(s)
-  }
-  const today     = new Date().toDateString()
-  const yesterday = new Date(Date.now() - 86_400_000).toDateString()
-  return [...groups.entries()].map(([key, sessions]) => ({
-    dateLabel: key === today ? 'Today' : key === yesterday ? 'Yesterday' : key,
-    sessions,
-  }))
-})
-
-function formatSessionTime(ts: number): string {
-  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-}
-
-async function onSessionClick(session: HistorySession) {
-  reloadHint.value = []
-  hintStartHandle.value = null
-
-  if (isFileSystemAccessSupported()) {
-    reloadingId.value = session.id
-    try {
-      // Variant B: try silent auto-reload from stored handles
-      if (session.hasHandles) {
-        const files = await reloadSession(session)
-        if (files && files.length > 0) {
-          await handleFiles(files, undefined, true)
-          emit('open')
-          return
-        }
-      }
-      // Variant B fallback: open picker starting in the session's directory
-      const handles = await getSessionHandles(session.id)
-      const startHandle = handles?.[0] ?? undefined
-      const result = await pickFilesViaFSAA(true, startHandle)
-      if (result) {
-        await handleFiles(result.files, result.handles, true)
-        emit('open')
-        return
-      }
-    } finally {
-      reloadingId.value = null
-    }
-    return
-  }
-
-  // Variant A (no FSAA): show file list hint only, user must pick files manually
-  reloadHint.value = session.fileNames
-}
-
-async function onDeleteSession(session: HistorySession) {
-  await deleteSession(session.id)
-  historySessions.value = getSessions()
-  if (reloadHint.value.length > 0 && reloadHint.value.join() === session.fileNames.join()) {
-    reloadHint.value = []
-  }
-}
-
-async function onClearHistory() {
-  await clearHistory()
-  historySessions.value = []
-  reloadHint.value = []
-}
-
-// ── File picking ──────────────────────────────────────────────────────────────
-
-async function onChooseFiles() {
-  if (isFileSystemAccessSupported()) {
-    const result = await pickFilesViaFSAA(true)
-    if (result) { await handleFiles(result.files, result.handles); return }
-  }
-  fileInputRef.value?.click()
-}
-
-async function onChooseFolder() {
-  if (isFileSystemAccessSupported()) {
-    const result = await pickFolderViaFSAA()
-    if (result) { await handleFiles(result.files, result.handles); return }
-  }
-  folderInputRef.value?.click()
-}
-
-// ── Core file handler ─────────────────────────────────────────────────────────
-
-const TYPE_LABELS: Record<SpineFileType, string> = {
-  'skeleton-json': 'JSON',
-  'skeleton-skel': 'SKEL',
-  atlas:           'ATLAS',
-  image:           'IMG',
-}
-
-async function handleFiles(files: File[], handles?: FileSystemFileHandle[], skipHistory = false) {
-  if (files.length === 0) return
-  isDragging.value     = false
-  classifyError.value  = null
-  versionUnknown.value = false
-  reloadHint.value     = []
-
-  loaderStore.setPendingFiles(files)
-
-  const result = await groupSpineFiles(files)
-
-  if (result.globalError) {
-    classifyError.value = result.globalError
-    return
-  }
-  if (result.slots.length === 0) {
-    classifyError.value = 'No valid Spine files found'
-    return
-  }
-
-  const firstValid = result.slots.find(s => !s.error && s.fileSet)
-  let version: string | null = null
-  if (firstValid?.fileSet) {
-    const { skeleton } = firstValid.fileSet
-    version = skeleton.type === 'skeleton-json'
-      ? detectSpineVersion(skeleton.fileBody as string)
-      : detectSpineVersionFromSkel(skeleton.fileBody as ArrayBuffer)
-  }
-
-  for (const slot of result.slots) {
-    if (slot.fileSet) {
-      const errs = validateSpineFileSet(slot.fileSet)
-      if (errs.length > 0) slot.validationErrors = errs
-    }
-  }
-
-  loaderStore.setSlots(result.slots, version)
-
-  if (version && version !== 'unknown') {
-    autoSelectVersion(version)
-  } else {
-    versionUnknown.value = true
-  }
-
-  // Save to history only for manual loads, not session reloads
-  if (!skipHistory && result.slots.some(s => !s.error && !s.validationErrors?.length)) {
-    await saveSession(files.map(f => f.name), handles)
-    historySessions.value = getSessions()
-  }
-}
-
-function autoSelectVersion(version: string) {
-  if      (version === '3.8') store.selectVersion(7, '3.8' as SpineVersion)
-  else if (version === '4.0') store.selectVersion(7, '4.0' as SpineVersion)
-  else if (version === '4.1') store.selectVersion(7, '4.1' as SpineVersion)
-  else if (version === '4.2') store.selectVersion(8, '4.2' as SpineVersion)
-}
-
-async function onDrop(e: DragEvent) {
-  if (!e.dataTransfer) return
-  // Capture FSAA handle promises synchronously BEFORE any await —
-  // browsers clear DataTransfer.items after the first event-loop tick.
-  const handlePromises: Promise<FileSystemHandle | null>[] = isFileSystemAccessSupported()
-    ? Array.from(e.dataTransfer.items).map(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        // TODO: remove cast when File System Access API types are stable in TypeScript lib
-        item => (((item as any).getAsFileSystemHandle?.() ?? Promise.resolve(null)) as Promise<FileSystemHandle | null>),
-      )
-    : []
-
-  const files = await getFilesFromDataTransfer(e.dataTransfer)
-
-  // Resolve the handles captured synchronously above
-  const handles: FileSystemFileHandle[] = []
-  for (const p of handlePromises) {
-    try {
-      const handle = await p
-      if (handle?.kind === 'file') {
-        handles.push(handle as FileSystemFileHandle)
-      } else if (handle?.kind === 'directory') {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        // TODO: remove cast when File System Access API types are stable in TypeScript lib
-        for await (const entry of (handle as any).values()) {
-          if (entry.kind === 'file') handles.push(entry as FileSystemFileHandle)
-        }
-      }
-    } catch {}
-  }
-
-  await handleFiles(files, handles.length > 0 ? handles : undefined)
-}
-
-function onFileInput(e: Event) {
-  const input = e.target as HTMLInputElement
-  if (!input.files) return
-  // No handles available from <input type="file"> — variant A only
-  handleFiles(Array.from(input.files))
-  input.value = ''
-}
-
-function onClear() {
-  loaderStore.clear()
-  classifyError.value  = null
-  versionUnknown.value = false
-}
-
-function onOpenCompare() {
-  const slots = loaderStore.spineSlots
-    .map((s, i) => ({ s, i }))
-    .filter(({ s }) => !s.error && !(s.validationErrors?.length))
-  if (slots.length >= 2) {
-    emit('open-compare', { left: slots[0].i, right: slots[1].i })
-  } else if (slots.length === 1) {
-    emit('open-compare', { left: slots[0].i })
-  } else {
-    emit('open-compare', {})
-  }
-}
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
-}
+const {
+  historySessions, reloadingId, reloadHint, groupedHistory,
+  formatSessionTime, clearReloadHint,
+  onSessionClick, onDeleteSession, onClearHistory,
+} = history
 </script>
 
 <style scoped>

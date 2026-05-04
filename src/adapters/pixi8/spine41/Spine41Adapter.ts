@@ -58,4 +58,7 @@ export default class StubAdapter implements ISpineAdapter {
   getImageContainerWorldTransform(_imageId: string): null { return null }
   getImageAtCanvasPoint(_x: number, _y: number): null { return null }
   setImageZIndex(_imageId: string, _zIndex: number): void { /* no-op */ }
+  getSpineObject(): unknown | null { return null }
+  getPlaceholderContainer(_phName: string): unknown | null { return null }
+  getPlaceholderContainerWorldTransform(_phName: string): { a: number; b: number; c: number; d: number; tx: number; ty: number } | null { return null }
 }

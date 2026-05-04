@@ -52,6 +52,7 @@ Browser-based viewer for [Spine](http://esotericsoftware.com/) skeletal animatio
 - **Sync toggle** (🔗) per skeleton — when disabled, the active skeleton moves and scales independently from the global scene; drag moves only it, scroll wheel scales only it; hold **Shift** to move the global scene while sync is off
 - **Clone button** — duplicate the active skeleton with its full current state (animation, skin, position, sync); the clone is fully independent of the original
 - **Placeholder images** — expand a skeleton row (▶) to reveal its placeholder slots; drop PNG/JPG/WebP images onto a slot to attach them as child sprites at the placeholder's origin; multiple images per slot; each removable individually; click a thumbnail to **activate** it; disable the sync toggle (🔗) on an image to move it by dragging or scale it with the scroll wheel independently; transform saved per skeleton
+- **Placeholder spines** — drop a spine skeleton file onto a placeholder slot to attach it as a live child spine that renders and animates inside the container; click its sprite on canvas to activate it and control animation, skins, and tracks independently; disable sync (🔗) to reposition and scale it freely
 - **Drop zone** at the bottom of the Spines tab — drop image files (PNG / JPG / WebP / AVIF) to add a background image, or drop spine file sets to add new skeletons with automatic version detection and validation
 
 ### Background Image
@@ -202,10 +203,12 @@ When you drop multiple Spine skeletons, all are loaded into slots. The **Spines*
 
 ## Changelog
 
+### v1.3.7
+- **Spine in placeholder** — drop a spine skeleton file onto any placeholder slot to attach it as a live child spine; renders and animates inside the placeholder container simultaneously with the parent; click on canvas to activate and control animation, skins, and tracks independently; sync toggle (🔗) allows independent drag and scale inside the container
+
 ### v1.3.6
-- **Global toolbar persistent state** — Expand / Sync / Pin intent stored in `useLoaderStore`; survives panel tab switches
-- **Global Sync applies to placeholder images** — toggling sync all also syncs/desyncs all placeholder image sprites
-- **Auto-pin on first track** — active when Spines tab is not open (watch moved to ViewerPage)
+- **Global toolbar persistent state** — Expand / Sync / Pin toolbar state above the Spines list survives panel tab switches
+- **Global Sync applies to placeholder images** — toggling sync-all also syncs/desyncs all placeholder image sprites
 
 ### v1.3.5
 - **Drag & drop reorder placeholder images** — drag anywhere on the image row to reorder within the placeholder or move to another placeholder drop zone (even across spines); z-index updates live

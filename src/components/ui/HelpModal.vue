@@ -60,6 +60,7 @@
           <li>Change <b>background color</b> via the color picker in the bottom-right corner of the canvas</li>
           <li><b>Placeholder labels</b> — toggle the <code>ph</code> checkbox to show/hide named placeholder overlays; expand the list below to enable/disable individual placeholders; toggle state and per-item visibility saved per skeleton</li>
           <li><b>Placeholder images</b> — expand a skeleton in the Spines tab to see its placeholder slots; drag &amp; drop any image (PNG/JPG/WebP) onto a placeholder drop zone to attach it as a child sprite; multiple images per placeholder are supported; each can be removed individually; click a thumbnail to <b>activate</b> it (or click directly on the sprite on canvas when desynced); disable the sync toggle (🔗) on an image to reposition it by dragging or scale it with the scroll wheel independently; clicking a desynced image of a <b>pinned non-active spine</b> on canvas activates that spine and starts dragging the image in one click; overlapping images are sorted by z-index (last added = on top); state saved per skeleton</li>
+          <li><b>Placeholder spines</b> — drop a spine skeleton file onto a placeholder drop zone to attach it as a live child spine inside the container; the child renders and plays simultaneously with the parent; click its sprite on canvas to activate it and control its animation, skins, and tracks independently in the side panels; disable sync (🔗) to reposition and scale it freely inside the container; multiple children per placeholder supported; state saved and restored per skeleton</li>
           <li><b>Independent pan/zoom</b> — disable the sync toggle (🔗) on a skeleton or background image in the Spines tab; drag and scroll then affect only that item; hold <kbd>Shift</kbd> to pan/zoom the global scene instead (Shift+drag = global pan, Shift+scroll = global zoom)</li>
         </ul>
       </section>
@@ -72,7 +73,7 @@
         <div class="tab-grid">
           <div class="tab-item">
             <span class="tab-badge">Spines</span>
-            <span>Appears when 2+ skeletons or a background image is loaded — click to switch the active skeleton; <b>drag</b> the 6-dot handle to reorder (top = highest z-index on stage); <b>pin</b> (📌) to keep a skeleton visible while browsing others; click a <b>pinned non-active spine on canvas</b> to activate it directly. Viewport, animation, skin, and placeholder state saved per skeleton. <b>Sync toggle</b> (🔗) — disable to move/zoom the active item independently (Shift+drag/scroll moves the scene). <b>Clone</b> button duplicates the active skeleton with its full state. <b>Global toolbar</b> (Expand / Sync / Pin) above the list applies the action to all spines at once; Sync also desyncs all placeholder images; state persists when switching to other tabs. <b>Expand</b> a skeleton row (▶) to reveal its placeholder slots — drop images onto them to attach child sprites; click a thumbnail to activate it; each image has its own <b>sync toggle</b> (🔗) — disable to drag/scroll-scale that image independently; <b>clone button</b> duplicates the image at (0, 0) with the original scale; <b>drag</b> anywhere on the image row to reorder within the placeholder or move to another placeholder drop zone (even across spines). <b>Drop zone</b> at the bottom — drop an image to set a background, or drop spine files to add new skeletons</span>
+            <span>Appears when 2+ skeletons or a background image is loaded — click to switch the active skeleton; <b>drag</b> the 6-dot handle to reorder (top = highest z-index on stage); <b>pin</b> (📌) to keep a skeleton visible while browsing others; click a <b>pinned non-active spine on canvas</b> to activate it directly. Viewport, animation, skin, and placeholder state saved per skeleton. <b>Sync toggle</b> (🔗) — disable to move/zoom the active item independently (Shift+drag/scroll moves the scene). <b>Clone</b> button duplicates the active skeleton with its full state. <b>Global toolbar</b> (Expand / Sync / Pin) above the list applies the action to all spines at once; Sync also desyncs all placeholder images; state persists when switching to other tabs. <b>Expand</b> a skeleton row (▶) to reveal its placeholder slots — drop images (PNG/JPG/WebP) or <b>spine skeleton files</b> onto them to attach child sprites or live child spines; click a thumbnail to activate it; each child has its own <b>sync toggle</b> (🔗) — disable to drag/scroll-scale that child independently; for images: <b>clone button</b> duplicates the image at (0, 0) with the original scale; <b>drag</b> anywhere on the image row to reorder within the placeholder or move to another placeholder drop zone (even across spines); child spines can be activated by clicking on canvas to control their animation and skins in the side panels. <b>Drop zone</b> at the bottom — drop an image to set a background, or drop spine files to add new skeletons</span>
           </div>
           <div class="tab-item">
             <span class="tab-badge">Anim</span>
@@ -179,6 +180,18 @@
       <section class="help-section">
         <h3 class="sec-title">What's New</h3>
         <div class="changelog">
+          <div class="cl-entry">
+            <span class="cl-ver">v1.3.7</span>
+            <ul class="help-list">
+              <li><b>Spine in placeholder</b> — drop a spine skeleton file onto any placeholder drop zone to attach it as a live child spine; it renders and animates inside the placeholder container simultaneously with the parent; click its sprite on canvas to activate it and control animation, skins, and tracks independently; disable sync (🔗) to reposition and scale it freely inside the container</li>
+            </ul>
+          </div>
+          <div class="cl-entry">
+            <span class="cl-ver">v1.3.6</span>
+            <ul class="help-list">
+              <li><b>Global toolbar state persistence</b> — Expand / Sync / Pin toolbar state above the Spines list is preserved when switching tabs and restored on return</li>
+            </ul>
+          </div>
           <div class="cl-entry">
             <span class="cl-ver">v1.3.5</span>
             <ul class="help-list">

@@ -178,13 +178,13 @@
 <script setup lang="ts">
 import { useAtlasStore }   from '@/core/stores/useAtlasStore'
 import { useSkeletonStore } from '@/core/stores/useSkeletonStore'
-import { useLoaderStore }   from '@/core/stores/useLoaderStore'
+import { useSlotSelectionStore } from '@/core/stores/useSlotSelectionStore'
 import type { AtlasRegion, AtlasPage } from '@/core/utils/atlasTextParser'
 import type { SpineFileType } from '@/core/types/FileSet'
 
-const atlasStore    = useAtlasStore()
-const skeletonStore = useSkeletonStore()
-const loaderStore   = useLoaderStore()
+const atlasStore         = useAtlasStore()
+const skeletonStore      = useSkeletonStore()
+const slotSelectionStore = useSlotSelectionStore()
 
 const TYPE_LABELS: Record<SpineFileType, string> = {
   'skeleton-json': 'JSON',
@@ -194,7 +194,7 @@ const TYPE_LABELS: Record<SpineFileType, string> = {
 }
 
 const atlasFiles = computed(() => {
-  const fileSet = loaderStore.activeSlot?.fileSet
+  const fileSet = slotSelectionStore.activeSlot?.fileSet
   if (!fileSet) return []
   const sizeOf = (body: string | ArrayBuffer): number =>
     typeof body === 'string'

@@ -13,19 +13,19 @@
       class="drop-zone"
       :class="{
         'drop-zone--over': isDragging,
-        'drop-zone--has-files': loaderStore.hasFiles,
+        'drop-zone--has-files': fileLoaderStore.hasFiles,
       }"
       @dragover.prevent="isDragging = true"
       @dragleave.prevent="isDragging = false"
       @drop.prevent="onDrop"
     >
-      <template v-if="!loaderStore.hasFiles">
+      <template v-if="!fileLoaderStore.hasFiles">
         <div class="drop-icon">⬇</div>
         <p class="drop-text">Drop Spine files or folder here</p>
         <p class="drop-hint">skeleton.json · skeleton.atlas · images</p>
       </template>
       <template v-else>
-        <p class="drop-text-small">{{ loaderStore.pendingFileInfos.length }} files ready</p>
+        <p class="drop-text-small">{{ fileLoaderStore.pendingFileInfos.length }} files ready</p>
         <p class="drop-hint">Drop again to replace</p>
       </template>
     </div>
@@ -56,9 +56,9 @@
     </div>
 
     <!-- File list -->
-    <div v-if="loaderStore.hasFiles" class="file-list">
+    <div v-if="fileLoaderStore.hasFiles" class="file-list">
       <div
-        v-for="info in loaderStore.pendingFileInfos"
+        v-for="info in fileLoaderStore.pendingFileInfos"
         :key="info.name"
         class="file-row"
       >
@@ -77,7 +77,7 @@
       :bordered="false"
       class="version-alert"
     >
-      Detected <strong>Spine {{ loaderStore.detectedVersion }}</strong>,
+      Detected <strong>Spine {{ fileLoaderStore.detectedVersion }}</strong>,
       selected <strong>{{ versionStore.spineVersion }}</strong>.
       Loading may fail.
     </n-alert>
@@ -98,15 +98,15 @@
     <div class="actions">
       <n-button
         size="small"
-        :disabled="!loaderStore.hasFiles"
-        @click="loaderStore.clear()"
+        :disabled="!fileLoaderStore.hasFiles"
+        @click="fileLoaderStore.clear()"
       >
         Clear
       </n-button>
       <n-button
         type="primary"
         size="small"
-        :disabled="!loaderStore.hasFiles"
+        :disabled="!fileLoaderStore.hasFiles"
         :loading="isLoading"
         @click="onLoad"
       >
@@ -119,13 +119,13 @@
 <script setup lang="ts">
 import { classifyFiles, getFilesFromDataTransfer } from '@/core/utils/fileLoader'
 import { detectSpineVersion, isCompatible } from '@/core/utils/versionDetector'
-import { useLoaderStore } from '@/core/stores/useLoaderStore'
+import { useFileLoaderStore } from '@/core/stores/useFileLoaderStore'
 import { useVersionStore } from '@/core/stores/useVersionStore'
 import type { FileSet, SpineFileType } from '@/core/types/FileSet'
 
 const emit = defineEmits<{ load: [fileSet: FileSet] }>()
 
-const loaderStore  = useLoaderStore()
+const fileLoaderStore = useFileLoaderStore()
 const versionStore = useVersionStore()
 
 const isDragging = ref(false)
@@ -142,7 +142,7 @@ const TYPE_LABELS: Record<SpineFileType, string> = {
 }
 
 const versionMismatch = computed(() => {
-  const det = loaderStore.detectedVersion
+  const det = fileLoaderStore.detectedVersion
   const sel = versionStore.spineVersion
   if (!det || !sel) return false
   return !isCompatible(det, sel)
@@ -152,7 +152,7 @@ async function handleFiles(files: File[]) {
   if (files.length === 0) return
   isDragging.value  = false
   loadError.value   = null
-  loaderStore.setPendingFiles(files)
+  fileLoaderStore.setPendingFiles(files)
 }
 
 async function onDrop(e: DragEvent) {
@@ -172,7 +172,7 @@ async function onLoad() {
   isLoading.value = true
   loadError.value = null
 
-  const result = await classifyFiles(loaderStore.pendingFiles)
+  const result = await classifyFiles(fileLoaderStore.pendingFiles)
 
   if (!result.ok) {
     loadError.value = result.error
@@ -184,7 +184,7 @@ async function onLoad() {
     ? detectSpineVersion(result.fileSet.skeleton.fileBody as string)
     : null
 
-  loaderStore.setSlots([{ id: crypto.randomUUID(), name: result.fileSet.skeleton.filename, fileSet: result.fileSet }], version)
+  fileLoaderStore.setSlots([{ id: crypto.randomUUID(), name: result.fileSet.skeleton.filename, fileSet: result.fileSet }], version)
   isLoading.value = false
   emit('load', result.fileSet)
 }

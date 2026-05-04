@@ -44,7 +44,7 @@
 <script setup lang="ts">
 import CompareCanvasSlot from './CompareCanvasSlot.vue'
 import { useCompareStore } from '@/core/stores/useCompareStore'
-import { useLoaderStore } from '@/core/stores/useLoaderStore'
+import { useFileLoaderStore } from '@/core/stores/useFileLoaderStore'
 import type { FileSet } from '@/core/types/FileSet'
 import { compareSpines, type SpineData } from '@/core/utils/spineCompare'
 
@@ -55,8 +55,8 @@ const rightSlotRef = ref<InstanceType<typeof CompareCanvasSlot> | null>(null)
 
 // ── Stores ─────────────────────────────────────────────────────────────────────
 
-const compareStore = useCompareStore()
-const loaderStore  = useLoaderStore()
+const compareStore    = useCompareStore()
+const fileLoaderStore = useFileLoaderStore()
 
 // ── Resolve FileSets from compare slots ────────────────────────────────────────
 
@@ -64,7 +64,7 @@ function resolveFileSet(slot: typeof compareStore.leftSlot): FileSet | null {
   if (!slot) return null
   if (slot.source === 'direct') return slot.fileSet
   // source === 'loaded'
-  const spineSlot = loaderStore.spineSlots[slot.slotIndex]
+  const spineSlot = fileLoaderStore.spineSlots[slot.slotIndex]
   return spineSlot?.fileSet ?? null
 }
 

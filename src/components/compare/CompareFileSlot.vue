@@ -22,10 +22,10 @@
     <!-- Dropdown -->
     <div v-if="isOpen" class="slot-dropdown" v-click-outside="() => (isOpen = false)">
       <!-- Loaded spines -->
-      <template v-if="loaderStore.spineSlots.length > 0">
+      <template v-if="fileLoaderStore.spineSlots.length > 0">
         <div class="dropdown-group-label">Loaded spines</div>
         <button
-          v-for="(slot, i) in loaderStore.spineSlots.filter(s => !s.error)"
+          v-for="(slot, i) in fileLoaderStore.spineSlots.filter(s => !s.error)"
           :key="slot.id"
           class="dropdown-item"
           :class="{ 'dropdown-item--active': isActiveLoaded(i) }"
@@ -66,7 +66,7 @@
 
 <script setup lang="ts">
 import { useCompareStore, type SpineSlotRef } from '@/core/stores/useCompareStore'
-import { useLoaderStore } from '@/core/stores/useLoaderStore'
+import { useFileLoaderStore } from '@/core/stores/useFileLoaderStore'
 
 // ── Props ──────────────────────────────────────────────────────────────────────
 
@@ -76,8 +76,8 @@ const props = defineProps<{
 
 // ── Stores ─────────────────────────────────────────────────────────────────────
 
-const compareStore = useCompareStore()
-const loaderStore  = useLoaderStore()
+const compareStore    = useCompareStore()
+const fileLoaderStore = useFileLoaderStore()
 
 // ── State ──────────────────────────────────────────────────────────────────────
 

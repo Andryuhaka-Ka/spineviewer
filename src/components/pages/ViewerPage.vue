@@ -13,12 +13,12 @@
       <span class="version-tag">
         Pixi {{ versionStore.pixiVersion }} · Spine {{ versionStore.spineVersion }}
       </span>
-      <span v-if="loaderStore.activeSlot?.fileSet" class="spine-name-tag" :class="`spine-name-tag--${loaderStore.activeSlot.fileSet.skeleton.type}`">
+      <span v-if="slotSelectionStore.activeSlot?.fileSet" class="spine-name-tag" :class="`spine-name-tag--${slotSelectionStore.activeSlot.fileSet.skeleton.type}`">
         <span
           class="spine-type-badge"
-          :class="`spine-type-badge--${loaderStore.activeSlot.fileSet.skeleton.type}`"
-        >{{ loaderStore.activeSlot.fileSet.skeleton.type === 'skeleton-json' ? 'JSON' : 'SKEL' }}</span>
-        {{ loaderStore.activeSlot.fileSet.skeleton.filename }}
+          :class="`spine-type-badge--${slotSelectionStore.activeSlot.fileSet.skeleton.type}`"
+        >{{ slotSelectionStore.activeSlot.fileSet.skeleton.type === 'skeleton-json' ? 'JSON' : 'SKEL' }}</span>
+        {{ slotSelectionStore.activeSlot.fileSet.skeleton.filename }}
       </span>
       <div class="toolbar-spacer" />
       <n-button
@@ -31,7 +31,7 @@
       <n-button
         size="small"
         class="compare-toolbar-btn"
-        @click="emit('open-compare', { left: loaderStore.spineSlots.findIndex(s => s.id === loaderStore.activeSlotId) })"
+        @click="emit('open-compare', { left: fileLoaderStore.spineSlots.findIndex(s => s.id === slotSelectionStore.activeSlotId) })"
         title="Open Compare mode"
       >⇄ Compare</n-button>
       <SettingsPopover />
@@ -117,15 +117,19 @@ import ComplexityPanel from '@/components/panels/ComplexityPanel.vue'
 import ExportPanel from '@/components/panels/ExportPanel.vue'
 import SettingsPopover from '@/components/ui/SettingsPopover.vue'
 import HelpModal from '@/components/ui/HelpModal.vue'
+import { usePanelResize } from '@/core/composables/usePanelResize'
+import { useViewerKeyboard } from '@/core/composables/useViewerKeyboard'
+import { useExportHandlers } from '@/core/composables/useExportHandlers'
 import { useVersionStore } from '@/core/stores/useVersionStore'
 import { useSkeletonStore } from '@/core/stores/useSkeletonStore'
 import { useAnimationStore } from '@/core/stores/useAnimationStore'
-import { useLoaderStore } from '@/core/stores/useLoaderStore'
+import { useFileLoaderStore } from '@/core/stores/useFileLoaderStore'
+import { useSlotSelectionStore } from '@/core/stores/useSlotSelectionStore'
+import { useSlotUIStore } from '@/core/stores/useSlotUIStore'
 import { useExportStore } from '@/core/stores/useExportStore'
 import { useBackgroundStore } from '@/core/stores/useBackgroundStore'
 import { groupSpineFiles, readFileAsDataURL } from '@/core/utils/fileLoader'
 import { validateSpineFileSet } from '@/core/utils/spineValidator'
-import { downloadBlob, downloadJson, canvasToBlob, buildSpriteSheet } from '@/core/utils/exportUtils'
 
 const emit = defineEmits<{
   back:           []
@@ -135,7 +139,9 @@ const emit = defineEmits<{
 const versionStore     = useVersionStore()
 const skeletonStore    = useSkeletonStore()
 const animationStore   = useAnimationStore()
-const loaderStore      = useLoaderStore()
+const fileLoaderStore    = useFileLoaderStore()
+const slotSelectionStore = useSlotSelectionStore()
+const slotUIStore        = useSlotUIStore()
 const exportStore      = useExportStore()
 const backgroundStore  = useBackgroundStore()
 const stageRef         = ref<InstanceType<typeof PreviewStage> | null>(null)
@@ -150,112 +156,21 @@ watch(
 // Auto-pin active slot when it gets its first animation track and globalPinEnabled is on.
 // Lives here (not SpinesPanel) so it stays active even when Spines tab is not open.
 watch(() => animationStore.tracks.length, (newLen, oldLen) => {
-  if (oldLen === 0 && newLen > 0 && loaderStore.globalPinEnabled) {
-    const id = loaderStore.activeSlotId
-    if (id) loaderStore.setPinned(id, true)
+  if (oldLen === 0 && newLen > 0 && slotUIStore.globalPinEnabled) {
+    const id = slotSelectionStore.activeSlotId
+    if (id) slotSelectionStore.setPinned(id, true)
   }
 })
 
-// ── Resizable side panel ──────────────────────────────────────────────────────
-const PANEL_MIN = 180
-const PANEL_MAX = 520
-const panelWidth = ref(
-  Math.min(PANEL_MAX, Math.max(PANEL_MIN, parseInt(localStorage.getItem('svp:panelWidth') ?? '380')))
-)
-
-function onResizeStart(e: MouseEvent) {
-  const startX = e.clientX
-  const startW = panelWidth.value
-
-  const onMove = (ev: MouseEvent) => {
-    panelWidth.value = Math.min(PANEL_MAX, Math.max(PANEL_MIN, startW + ev.clientX - startX))
-  }
-  const onUp = () => {
-    window.removeEventListener('mousemove', onMove)
-    window.removeEventListener('mouseup', onUp)
-    localStorage.setItem('svp:panelWidth', String(panelWidth.value))
-  }
-  window.addEventListener('mousemove', onMove)
-  window.addEventListener('mouseup', onUp)
-}
-
-// ── Keyboard shortcuts ────────────────────────────────────────────────────────
-function onKeyDown(e: KeyboardEvent) {
-  const tag = (e.target as HTMLElement).tagName
-  if (tag === 'INPUT' || tag === 'TEXTAREA') return
-  // isComposing=true means an IME/dead-key sequence is in progress — ignore to avoid
-  // misfires when switching to a non-Latin keyboard layout (e.g. Ukrainian/CJK)
-  if (e.isComposing || e.keyCode === 229) return
-
-  // Space on focused interactive controls (checkbox, switch, button) would toggle them
-  // in addition to firing our shortcut. Stop propagation here (capture phase) so the
-  // control never receives the Space event — our handler takes over instead.
-  if (e.code === 'Space') {
-    const role = (e.target as HTMLElement).getAttribute?.('role') ?? ''
-    if (role === 'checkbox' || role === 'switch' || role === 'button') {
-      e.stopPropagation()
-    }
-  }
-
-  switch (e.code) {
-    case 'Space':
-      e.preventDefault()
-      animationStore.isPlaying ? animationStore.pause() : animationStore.play()
-      break
-    case 'ArrowLeft':
-      e.preventDefault()
-      if (animationStore.isPlaying) animationStore.pause()
-      stageRef.value?.seekDelta(animationStore.currentTrack, -1 / 30)
-      break
-    case 'ArrowRight':
-      e.preventDefault()
-      if (animationStore.isPlaying) animationStore.pause()
-      stageRef.value?.seekDelta(animationStore.currentTrack, 1 / 30)
-      break
-    case 'KeyR':
-      stageRef.value?.clearTracks()
-      break
-    case 'KeyL': {
-      const targets = e.shiftKey
-        ? animationStore.tracks
-        : animationStore.tracks.filter(t => t.trackIndex === animationStore.currentTrack)
-      for (const t of targets) {
-        stageRef.value?.setTrackLoop(t.trackIndex, !t.loop)
-      }
-      break
-    }
-    default:
-      if (/^Digit[0-9]$/.test(e.code)) {
-        animationStore.currentTrack = Number(e.code.replace('Digit', ''))
-      }
-  }
-}
-
-// Block Space keyup on interactive controls (NaiveUI handles toggle on keyup,
-// so keydown stopPropagation alone is not enough).
-function onKeyUpCapture(e: KeyboardEvent) {
-  if (e.code !== 'Space') return
-  const role = (e.target as HTMLElement).getAttribute?.('role') ?? ''
-  if (role === 'checkbox' || role === 'switch' || role === 'button') {
-    e.stopPropagation()
-    e.preventDefault()
-  }
-}
-
-onMounted(() => {
-  window.addEventListener('keydown', onKeyDown, true)
-  window.addEventListener('keyup', onKeyUpCapture, true)
-})
-onUnmounted(() => {
-  window.removeEventListener('keydown', onKeyDown, true)
-  window.removeEventListener('keyup', onKeyUpCapture, true)
-})
+const { panelWidth, onResizeStart } = usePanelResize()
+useViewerKeyboard(stageRef)
+const { onCapturePng, onCapturePose, onCaptureSheet, onCaptureGif, onCancelExport } = useExportHandlers(stageRef)
 
 function onClickBack() {
   if (!window.confirm('Reset viewer and return to version picker?')) return
   skeletonStore.clear()
   animationStore.reset()
-  loaderStore.clear()
+  fileLoaderStore.clear()
   exportStore.finish()
   backgroundStore.clearAll()
   emit('back')
@@ -281,7 +196,7 @@ async function onCanvasDrop(e: DragEvent) {
       if (!ok) return
     }
     backgroundStore.set({ dataUrl, width: img.naturalWidth, height: img.naturalHeight })
-    backgroundStore.setListIndex(loaderStore.spineSlots.length)
+    backgroundStore.setListIndex(fileLoaderStore.spineSlots.length)
     return
   }
 
@@ -296,7 +211,7 @@ async function onCanvasDrop(e: DragEvent) {
         const errs = validateSpineFileSet(slot.fileSet)
         if (errs.length > 0) slot.validationErrors = errs
       }
-      loaderStore.addSlot(slot)
+      fileLoaderStore.addSlot(slot)
     }
   }
 }
@@ -331,126 +246,6 @@ function onSeekDelta(track: number, delta: number) {
 
 function onSetSkins(names: string[]) {
   stageRef.value?.setSkins(names)
-}
-
-// ── Export handlers ──────────────────────────────────────────────────────────
-
-async function onCapturePng() {
-  if (!stageRef.value) return
-  exportStore.start('png')
-  try {
-    const canvas = await stageRef.value.captureCurrentFrame()
-    if (!canvas) return
-    const blob = await canvasToBlob(canvas)
-    downloadBlob(blob, 'spine-frame.png')
-  } catch (e) {
-    exportStore.fail(e instanceof Error ? e.message : 'Failed to capture PNG')
-    return
-  }
-  exportStore.finish()
-}
-
-async function onCapturePose() {
-  if (!stageRef.value) return
-  exportStore.start('pose')
-  try {
-    const bones = stageRef.value.getBoneTransformsSnapshot()
-    downloadJson({ bones, timestamp: Date.now() }, 'spine-pose.json')
-  } catch (e) {
-    exportStore.fail(e instanceof Error ? e.message : 'Failed to export pose')
-    return
-  }
-  exportStore.finish()
-}
-
-function onCancelExport() {
-  exportStore.cancel()
-}
-
-async function onCaptureSheet(opts: { track: number; frameCount: number; cols: number }) {
-  if (!stageRef.value) return
-  const signal = exportStore.start('sheet')
-  try {
-    const frames: HTMLCanvasElement[] = []
-    const ok = await stageRef.value.captureAnimFrames(
-      opts.track,
-      opts.frameCount,
-      (canvas, i, total) => {
-        frames.push(canvas)
-        exportStore.setProgress(((i + 1) / total) * 100)
-      },
-      signal,
-    )
-    if (!ok || signal.aborted) { exportStore.finish(); return }
-    const sheet = await buildSpriteSheet(frames, opts.cols)
-    const blob  = await canvasToBlob(sheet)
-    downloadBlob(blob, 'spine-sheet.png')
-  } catch (e) {
-    exportStore.fail(e instanceof Error ? e.message : 'Failed to build sprite sheet')
-    return
-  }
-  exportStore.finish()
-}
-
-async function onCaptureGif(opts: { track: number; fps: number; quality: number }) {
-  if (!stageRef.value) return
-  const signal = exportStore.start('gif')
-  try {
-    const entry = animationStore.tracks.find(t => t.trackIndex === opts.track)
-    if (!entry || entry.duration <= 0) { exportStore.finish(); return }
-
-    const frameCount = Math.max(2, Math.round(entry.duration * opts.fps))
-    const frameDelay = Math.round(1000 / opts.fps)
-
-    interface GIFInstance {
-      addFrame(canvas: HTMLCanvasElement, options?: { delay?: number; copy?: boolean }): void
-      on(event: 'finished', cb: (blob: Blob) => void): void
-      on(event: 'progress', cb: (pct: number) => void): void
-      on(event: 'abort', cb: () => void): void
-      render(): void
-      abort(): void
-    }
-    const GIF = (await import('gif.js')).default
-
-    // Size is unknown until first frame — create GIF lazily
-    let gif: GIFInstance | null = null
-
-    const ok = await stageRef.value.captureAnimFrames(
-      opts.track,
-      frameCount,
-      (canvas, i, total) => {
-        if (!gif) {
-          gif = new GIF({
-            workers:      2,
-            quality:      opts.quality,
-            workerScript: `${import.meta.env.BASE_URL}gif.worker.js`,
-            width:        canvas.width,
-            height:       canvas.height,
-            repeat:       0,
-          })
-        }
-        // copy:true so gif.js reads pixels now — canvas can be reused/GC'd
-        gif.addFrame(canvas, { delay: frameDelay, copy: true })
-        exportStore.setProgress(Math.round(((i + 1) / total) * 70))
-      },
-      signal,
-    )
-
-    // render() not called yet — just discard gif object and exit
-    if (!ok || signal.aborted || !gif) { exportStore.finish(); return }
-
-    await new Promise<void>((resolve) => {
-      gif!.on('progress', (p: number) => exportStore.setProgress(70 + Math.round(p * 30)))
-      gif!.on('finished', (blob: Blob) => { downloadBlob(blob, 'spine-animation.gif'); resolve() })
-      gif!.on('abort',    () => resolve()) // aborted by user — resolve cleanly
-      signal.addEventListener('abort', () => gif!.abort())
-      gif!.render()
-    })
-  } catch (e) {
-    exportStore.fail(e instanceof Error ? e.message : 'Failed to encode GIF')
-    return
-  }
-  exportStore.finish()
 }
 </script>
 

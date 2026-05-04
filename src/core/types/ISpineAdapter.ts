@@ -169,4 +169,11 @@ export interface ISpineAdapter {
   getImageAtCanvasPoint(x: number, y: number): string | null
   // Sets the zIndex of the PIXI.Sprite for the given imageId (requires sortableChildren on parent).
   setImageZIndex(imageId: string, zIndex: number): void
+
+  // Returns the spine's root PIXI.Container (set after mount(); null before).
+  getSpineObject(): unknown | null
+  // Returns the deepest container for the named placeholder slot (for mounting a child spine). Null if not found.
+  getPlaceholderContainer(phName: string): unknown | null
+  // Returns the world transform of the placeholder container (for inverse-matrix drag of child spine).
+  getPlaceholderContainerWorldTransform(phName: string): { a: number; b: number; c: number; d: number; tx: number; ty: number } | null
 }

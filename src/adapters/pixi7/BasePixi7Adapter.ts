@@ -52,6 +52,9 @@ export abstract class BasePixi7Adapter implements ISpineAdapter {
     needsTick: boolean
   }> = []
   private _phImages: Map<string, PIXI.Sprite> = new Map() // imageId → Sprite
+  // Dedicated containers added directly to slotContainers[idx] for child spine mounting.
+  // Kept separate from the deep image-target so findDeepestTarget never descends into them.
+  private _phChildContainers: Map<string, PIXI.Container> = new Map() // phName → Container
 
   // ── Load ────────────────────────────────────────────────────────────────────
 
@@ -145,6 +148,7 @@ export abstract class BasePixi7Adapter implements ISpineAdapter {
       sprite.destroy({ texture: true, baseTexture: true })
     }
     this._phImages.clear()
+    this._phChildContainers.clear()
     this.clearPlaceholderLabels()
     if (this._container && this._spine) {
       this._container.removeChild(this._spine)
@@ -637,6 +641,44 @@ export abstract class BasePixi7Adapter implements ISpineAdapter {
     this._eventUnsubscribers.push(unsub)
     return unsub
   }
+
+  getSpineObject(): unknown | null { return this._spine }
+
+  getPlaceholderContainer(phName: string): unknown | null {
+    if (!this._spine) return null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const slotIdx = (this._spine.skeleton.slots as any[]).findIndex((s: any) => s.data.name === phName)
+    if (slotIdx === -1) return null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const containers = (this._spine as any).slotContainers as any[] | undefined
+    const slotCont = containers?.[slotIdx]
+    if (!slotCont) return null
+
+    // Use a dedicated container at the same level as image sprites (findDeepestTarget result).
+    // Marked __phSpine=true so findDeepestTarget never descends into it — prevents crashes
+    // and label misplacement in tickPlaceholderLabels when the child spine's internal tree
+    // would otherwise be traversed.
+    let phContainer = this._phChildContainers.get(phName)
+    if (!phContainer) {
+      phContainer = new PIXI.Container()
+      phContainer.sortableChildren = true
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(phContainer as any).__phSpine = true  // exclude from findDeepestTarget traversal
+      const target = findDeepestTarget(slotCont)
+      target.sortableChildren = true
+      target.addChild(phContainer)
+      this._phChildContainers.set(phName, phContainer)
+    }
+    return phContainer
+  }
+
+  getPlaceholderContainerWorldTransform(phName: string): { a: number; b: number; c: number; d: number; tx: number; ty: number } | null {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const container = this.getPlaceholderContainer(phName) as any
+    if (!container) return null
+    const m = container.worldTransform
+    return { a: m.a, b: m.b, c: m.c, d: m.d, tx: m.tx, ty: m.ty }
+  }
 }
 
 /**
@@ -650,7 +692,7 @@ function findDeepestTarget(node: any): any {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const eligible: any[] = (node.children ?? []).filter(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (c: any) => Array.isArray(c.children) && !(c instanceof PIXI.Text) && !c.__phImage && c.visible !== false,
+    (c: any) => Array.isArray(c.children) && !(c instanceof PIXI.Text) && !c.__phImage && !c.__phSpine && c.visible !== false,
   )
   if (eligible.length === 0) return node
   return findDeepestTarget(eligible[0])

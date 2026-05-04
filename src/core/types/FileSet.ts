@@ -23,6 +23,7 @@ export interface FileSet {
 }
 
 export interface PHImageEntry {
+  kind: 'image'
   imageId: string
   fileName: string
   dataURL: string
@@ -31,6 +32,20 @@ export interface PHImageEntry {
   posY: number
   scale: number
 }
+
+export interface PHSpineEntry {
+  kind: 'spine'
+  imageId: string        // entry ID (reuses field name for store uniformity)
+  childSlotId: string    // ID of the SpineSlot in loaderStore.spineSlots
+  fileName: string       // display name (skeleton filename)
+  fileSet: FileSet       // in-memory FileSet for re-loading child adapter
+  syncEnabled: boolean
+  posX: number
+  posY: number
+  scale: number
+}
+
+export type PHChildEntry = PHImageEntry | PHSpineEntry
 
 export interface SpineSlotSavedState {
   // Viewport
@@ -50,7 +65,8 @@ export interface SpineSlotSavedState {
   // Placeholders
   showPlaceholders: boolean
   disabledPlaceholders: string[]
-  placeholderImages?: Record<string, PHImageEntry[]>
+  placeholderImages?: Record<string, PHImageEntry[]>     // deprecated, kept for legacy read-compat
+  placeholderChildren?: Record<string, PHChildEntry[]>  // takes precedence on restore
   // Independent movement
   syncEnabled: boolean
   indPosX: number
@@ -66,6 +82,7 @@ export interface SpineSlot {
   validationErrors?: string[]   // content validation errors (missing images, regions, etc.)
   savedState?: SpineSlotSavedState
   placeholders?: Array<{ name: string; kind: 'bone' | 'slot' }>
+  parentSlotId?: string         // set for child spines dropped into placeholders
   // Independent movement (desynced from global viewport)
   syncEnabled?: boolean         // default: true
   indPosX?: number              // default: 0

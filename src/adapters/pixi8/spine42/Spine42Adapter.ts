@@ -48,7 +48,10 @@ export default class Spine42Adapter implements ISpineAdapter {
   /** Per-label-name texture cache — reused across setPlaceholderLabels calls. */
   private _phTextures = new Map<string, PIXI.Texture>()
   private _phImageSprites: Map<string, PIXI.Sprite> = new Map() // imageId → Sprite
-  private _phSlotContainers: Map<string, PIXI.Container> = new Map() // phName → Container
+  private _phSlotContainers: Map<string, PIXI.Container> = new Map() // phName → slot-following container (images live here)
+  // Dedicated sub-containers inside slot containers — child spines mount here, not directly into the slot object.
+  // Keeps child Spine objects separate from the addSlotObject mechanism to avoid render pipeline conflicts.
+  private _phChildContainers: Map<string, PIXI.Container> = new Map() // phName → child spine container
 
   // ── Load ───────────────────────────────────────────────────────────────────
 
@@ -157,6 +160,7 @@ export default class Spine42Adapter implements ISpineAdapter {
     }
     this._phImageSprites.clear()
     this._phSlotContainers.clear()
+    this._phChildContainers.clear()
     this.clearPlaceholderLabels()
     for (const tex of this._phTextures.values()) tex.destroy(true)
     this._phTextures.clear()
@@ -604,14 +608,24 @@ export default class Spine42Adapter implements ISpineAdapter {
   }
 
   getImageAtCanvasPoint(x: number, y: number): string | null {
-    const point = new PIXI.Point(x, y)
+    // Pixi 8 containsPoint is unreliable without eventMode — use getBounds() AABB instead,
+    // matching the same approach used for child-spine hit detection in Priority 2b.
     let topId: string | null = null
     let topZ = -Infinity
     for (const [imageId, sprite] of this._phImageSprites) {
-      if (sprite.containsPoint(point) && sprite.zIndex > topZ) {
-        topId = imageId
-        topZ = sprite.zIndex
-      }
+      if (sprite.zIndex <= topZ) continue
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const b: Record<string, number> = sprite.getBounds() as any
+        const bx = b['x'] !== undefined ? b['x'] : (b['minX'] ?? 0)
+        const by = b['y'] !== undefined ? b['y'] : (b['minY'] ?? 0)
+        const bw = b['width'] !== undefined ? b['width'] : ((b['maxX'] ?? bx) - bx)
+        const bh = b['height'] !== undefined ? b['height'] : ((b['maxY'] ?? by) - by)
+        if (bw > 0 && bh > 0 && x >= bx && x <= bx + bw && y >= by && y <= by + bh) {
+          topId = imageId
+          topZ = sprite.zIndex
+        }
+      } catch { /* skip sprites with invalid/unloaded bounds */ }
     }
     return topId
   }
@@ -634,6 +648,42 @@ export default class Spine42Adapter implements ISpineAdapter {
     const unsub = () => this._spine?.state.removeListener(listener)
     this._eventUnsubscribers.push(unsub)
     return unsub
+  }
+
+  getSpineObject(): unknown | null { return this._spine }
+
+  getPlaceholderContainer(phName: string): unknown | null {
+    if (!this._spine) return null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const slotExists = (this._spine.skeleton.slots as any[]).some((s: any) => s.data.name === phName)
+    if (!slotExists) return null
+
+    // Ensure the parent slot-following container exists (shared with images).
+    let slotContainer = this._phSlotContainers.get(phName)
+    if (!slotContainer) {
+      slotContainer = new PIXI.Container()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(this._spine as any).addSlotObject(phName, slotContainer)
+      this._phSlotContainers.set(phName, slotContainer)
+    }
+
+    // Return a dedicated sub-container for the child spine — kept separate from image sprites
+    // so the addSlotObject mechanism never processes the child Spine's internal hierarchy.
+    let childContainer = this._phChildContainers.get(phName)
+    if (!childContainer) {
+      childContainer = new PIXI.Container()
+      childContainer.sortableChildren = true
+      slotContainer.addChild(childContainer)
+      this._phChildContainers.set(phName, childContainer)
+    }
+    return childContainer
+  }
+
+  getPlaceholderContainerWorldTransform(phName: string): { a: number; b: number; c: number; d: number; tx: number; ty: number } | null {
+    const container = this.getPlaceholderContainer(phName) as PIXI.Container | null
+    if (!container) return null
+    const m = container.worldTransform
+    return { a: m.a, b: m.b, c: m.c, d: m.d, tx: m.tx, ty: m.ty }
   }
 }
 

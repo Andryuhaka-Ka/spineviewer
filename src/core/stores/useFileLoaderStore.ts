@@ -1,5 +1,5 @@
 /**
- * @file useLoaderStore.ts
+ * @file useFileLoaderStore.ts
  * @project Spine Viewer Pro
  * @author Andrii Karpus <andryuha.ka@gmail.com>
  * @copyright 2026 Andrii Karpus
@@ -9,6 +9,7 @@
 import { defineStore } from 'pinia'
 import { guessFileType } from '@/core/utils/fileLoader'
 import type { FileSet, SpineFile, SpineFileType, SpineSlot, SpineSlotSavedState } from '@/core/types/FileSet'
+import { useSlotSelectionStore } from './useSlotSelectionStore'
 
 /** Deep-clone a FileSet, correctly handling ArrayBuffer (binary .skel) via slice(). */
 function cloneFileSet(fs: FileSet): FileSet {
@@ -68,31 +69,19 @@ function scanPlaceholderSlots(fileSet: FileSet | undefined): Array<{ name: strin
   return []
 }
 
-export const useLoaderStore = defineStore('loader', () => {
+export const useFileLoaderStore = defineStore('file-loader', () => {
+  // ── State — defined first so cross-store consumers see these refs immediately ─
   /** Raw File objects shown in the file list (not yet read into memory) */
   const pendingFiles = ref<File[]>([])
   /** All loaded spine slots (up to SPINE_SLOTS_LIMIT) */
   const spineSlots = ref<SpineSlot[]>([])
-  /** ID of the currently active spine slot */
-  const activeSlotId = ref<string | null>(null)
   /** Spine version detected from the first valid slot's skeleton */
   const detectedVersion = ref<string | null>(null)
-  /** IDs of slots that are pinned on scene (visible even when not active) */
-  const pinnedSlotIds = ref<Set<string>>(new Set())
 
-  /** Global toolbar explicit intent refs — persist across panel switches */
-  const globalSyncEnabled   = ref(true)
-  const globalPinEnabled    = ref(false)
-  const globalExpandEnabled = ref(false)
+  // Cross-store — called after refs are defined so useSlotSelectionStore can read spineSlots.
+  const selectionStore = useSlotSelectionStore()
 
-  /** Currently active slot */
-  const activeSlot = computed(() =>
-    spineSlots.value.find(s => s.id === activeSlotId.value) ?? null,
-  )
-
-  /** Backward-compat: fileSet of active slot */
-  const fileSet = computed(() => activeSlot.value?.fileSet ?? null)
-
+  // ── Computed ─────────────────────────────────────────────────────────────────
   /** Recognised files from pendingFiles (ignores unknown extensions) */
   const pendingFileInfos = computed<PendingFileInfo[]>(() =>
     pendingFiles.value
@@ -105,25 +94,7 @@ export const useLoaderStore = defineStore('loader', () => {
   const validSlots = computed(() => spineSlots.value.filter(s => !s.error && !(s.validationErrors?.length)))
   const isLoaded = computed(() => validSlots.value.length > 0)
 
-  function setPinned(id: string, pinned: boolean) {
-    const next = new Set(pinnedSlotIds.value)
-    if (pinned) next.add(id)
-    else next.delete(id)
-    pinnedSlotIds.value = next
-  }
-
-  function isPinned(id: string): boolean {
-    return pinnedSlotIds.value.has(id)
-  }
-
-  function setPendingFiles(files: File[]) {
-    pendingFiles.value    = files
-    spineSlots.value      = []
-    activeSlotId.value    = null
-    detectedVersion.value = null
-    pinnedSlotIds.value   = new Set()
-  }
-
+  // ── Private helpers ───────────────────────────────────────────────────────────
   /** Initialise independent-movement defaults on a slot (idempotent). */
   function initSlotDefaults(slot: SpineSlot): void {
     if (slot.syncEnabled === undefined) slot.syncEnabled = true
@@ -133,6 +104,14 @@ export const useLoaderStore = defineStore('loader', () => {
     if (slot.placeholders === undefined) slot.placeholders = scanPlaceholderSlots(slot.fileSet)
   }
 
+  // ── Actions ───────────────────────────────────────────────────────────────────
+  function setPendingFiles(files: File[]) {
+    pendingFiles.value    = files
+    spineSlots.value      = []
+    detectedVersion.value = null
+    selectionStore.clearSelection()
+  }
+
   /** Replace all slots; activates the first fully-valid slot. */
   function setSlots(slots: SpineSlot[], version: string | null) {
     const limited = slots.slice(0, SPINE_SLOTS_LIMIT)
@@ -140,13 +119,7 @@ export const useLoaderStore = defineStore('loader', () => {
     spineSlots.value      = limited
     detectedVersion.value = version
     const first           = spineSlots.value.find(s => !s.error && !(s.validationErrors?.length))
-    activeSlotId.value    = first?.id ?? null
-  }
-
-  function setActiveSlot(id: string) {
-    if (spineSlots.value.some(s => s.id === id)) {
-      activeSlotId.value = id
-    }
+    selectionStore.activeSlotId = first?.id ?? null
   }
 
   function saveSlotState(id: string, state: SpineSlotSavedState) {
@@ -158,14 +131,24 @@ export const useLoaderStore = defineStore('loader', () => {
     const idx = spineSlots.value.findIndex(s => s.id === id)
     if (idx < 0) return
     spineSlots.value.splice(idx, 1)
-    if (activeSlotId.value === id) {
+    if (selectionStore.activeSlotId === id) {
       const next = spineSlots.value.find(s => !s.error)
-      activeSlotId.value = next?.id ?? null
+      selectionStore.activeSlotId = next?.id ?? null
     }
-    // Unpin removed slot
-    const next = new Set(pinnedSlotIds.value)
-    next.delete(id)
-    pinnedSlotIds.value = next
+    // Unpin removed slot — only reassign if the slot was actually pinned to avoid
+    // triggering the pin watcher unnecessarily (new Set always fires the watcher).
+    if (selectionStore.pinnedSlotIds.has(id)) {
+      selectionStore.setPinned(id, false)
+    }
+  }
+
+  /** Remove slot + recursively remove all slots whose parentSlotId === id. */
+  function removeSlotCascade(id: string): void {
+    const childIds = spineSlots.value
+      .filter(s => s.parentSlotId === id)
+      .map(s => s.id)
+    for (const childId of childIds) removeSlotCascade(childId)
+    removeSlot(id)
   }
 
   function reorderSlots(fromIndex: number, toIndex: number) {
@@ -176,11 +159,11 @@ export const useLoaderStore = defineStore('loader', () => {
     spineSlots.value = arr
   }
 
-  /** Patch placeholderImages in savedState for a non-active slot (e.g. after drag-reparent). No-op if slot has no savedState yet. */
-  function patchSlotPlaceholderImages(slotId: string, placeholderImages: Record<string, import('@/core/types/FileSet').PHImageEntry[]>): void {
+  /** Patch placeholderChildren in savedState for a non-active slot (e.g. after drag-reparent). No-op if slot has no savedState yet. */
+  function patchSlotPlaceholderImages(slotId: string, placeholderChildren: Record<string, import('@/core/types/FileSet').PHChildEntry[]>): void {
     const slot = spineSlots.value.find(s => s.id === slotId)
     if (!slot?.savedState) return
-    slot.savedState = { ...slot.savedState, placeholderImages: JSON.parse(JSON.stringify(placeholderImages)) }
+    slot.savedState = { ...slot.savedState, placeholderChildren: JSON.parse(JSON.stringify(placeholderChildren)) }
   }
 
   /** Update placeholders on a slot — triggers reactive array update so SpinesPanel re-renders. */
@@ -242,39 +225,29 @@ export const useLoaderStore = defineStore('loader', () => {
   function clear() {
     pendingFiles.value    = []
     spineSlots.value      = []
-    activeSlotId.value    = null
     detectedVersion.value = null
-    pinnedSlotIds.value   = new Set()
+    selectionStore.clearSelection()
   }
 
   return {
     pendingFiles,
     spineSlots,
-    activeSlotId,
-    activeSlot,
-    fileSet,
     detectedVersion,
     pendingFileInfos,
     hasFiles,
     validSlots,
     isLoaded,
-    pinnedSlotIds,
     setPendingFiles,
     setSlots,
-    setActiveSlot,
     saveSlotState,
     removeSlot,
-    clear,
-    setPinned,
-    isPinned,
+    removeSlotCascade,
     reorderSlots,
     addSlot,
     cloneSlot,
     setSyncEnabled,
     setSlotPlaceholders,
     patchSlotPlaceholderImages,
-    globalSyncEnabled,
-    globalPinEnabled,
-    globalExpandEnabled,
+    clear,
   }
 })

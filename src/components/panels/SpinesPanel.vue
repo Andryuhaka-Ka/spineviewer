@@ -45,12 +45,12 @@
       </button>
     </div>
     <div class="spines-list">
-      <template v-for="(slot, index) in loaderStore.spineSlots" :key="slot.id">
+      <template v-for="(slot, index) in visibleSlots" :key="slot.id">
         <div
           class="spine-item"
           :class="{
-            'spine-item--active':       slot.id === loaderStore.activeSlotId,
-            'spine-item--pinned':       loaderStore.isPinned(slot.id) && slot.id !== loaderStore.activeSlotId,
+            'spine-item--active':       slot.id === slotSelectionStore.activeSlotId,
+            'spine-item--pinned':       slotSelectionStore.isPinned(slot.id) && slot.id !== slotSelectionStore.activeSlotId,
             'spine-item--error':        isSlotError(slot),
             'spine-item--modified':     isModified(slot),
             'spine-item--dragging':     dragSrcIndex === index,
@@ -59,7 +59,7 @@
           }"
           :title="slot.error ?? (slot.validationErrors?.length ? slot.validationErrors[0] : slot.name)"
           :draggable="!isSlotError(slot)"
-          @click="!isSlotError(slot) && (loaderStore.setActiveSlot(slot.id), backgroundStore.setActive(false))"
+          @click="!isSlotError(slot) && (slotSelectionStore.setActiveSlot(slot.id), backgroundStore.setActive(false))"
           @dragstart="onDragStart($event, index)"
           @dragover="onDragOver($event, index)"
           @dragleave="onDragLeave"
@@ -82,6 +82,7 @@
           </span>
           <span v-else class="spine-drag-handle spine-drag-handle--placeholder" />
           <span class="spine-dot" />
+          <span v-if="slot.parentSlotId" class="spine-child-prefix">↳</span>
           <span class="spine-name">{{ slot.name }}</span>
           <span
             v-if="isModified(slot) && !isSlotError(slot)"
@@ -116,7 +117,7 @@
             class="spine-sync-btn"
             :class="{ 'spine-sync-btn--desynced': slot.syncEnabled === false }"
             title="Sync with global viewport"
-            @click.stop="loaderStore.setSyncEnabled(slot.id, slot.syncEnabled !== false ? false : true)"
+            @click.stop="fileLoaderStore.setSyncEnabled(slot.id, slot.syncEnabled !== false ? false : true)"
           >
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
               <path d="M15 7h2a5 5 0 0 1 0 10h-2m-6 0H7a5 5 0 0 1 0-10h2"/>
@@ -127,7 +128,7 @@
           <button
             v-if="!isSlotError(slot)"
             class="spine-clone-btn"
-            :disabled="loaderStore.spineSlots.length >= SPINE_SLOTS_LIMIT"
+            :disabled="fileLoaderStore.spineSlots.length >= SPINE_SLOTS_LIMIT"
             title="Clone this spine slot"
             @click.stop="onClone(slot.id)"
           >
@@ -141,11 +142,11 @@
             v-if="!isSlotError(slot)"
             class="spine-pin-btn"
             :class="{
-              'spine-pin-btn--pinned':  loaderStore.isPinned(slot.id),
+              'spine-pin-btn--pinned':  slotSelectionStore.isPinned(slot.id),
               'spine-pin-btn--pending': globalPinEnabled && !slotHasTracks(slot),
             }"
             title="Keep on scene when switching"
-            @click.stop="loaderStore.setPinned(slot.id, !loaderStore.isPinned(slot.id))"
+            @click.stop="slotSelectionStore.setPinned(slot.id, !slotSelectionStore.isPinned(slot.id))"
           >
             <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none">
               <path d="M17 4h-1V3a1 1 0 0 0-2 0v1H10V3a1 1 0 0 0-2 0v1H7a3 3 0 0 0-2.12 5.12L6 17v.5a.5.5 0 0 0 .5.5H11v2.5a1 1 0 0 0 2 0V18h4.5a.5.5 0 0 0 .5-.5V17l1.12-7.88A3 3 0 0 0 17 4z"/>
@@ -176,72 +177,136 @@
               @drop.prevent.stop="onPhDrop($event, slot.id, ph.name)"
             >
               <span class="ph-drop-name">{{ ph.name }}</span>
-              <span class="ph-drop-hint">drop image here</span>
+              <span class="ph-drop-hint">drop image or spine files here</span>
             </div>
             <div class="ph-images-list">
-              <div
+              <template
                 v-for="entry in phImagesStore.getPlaceholderImages(slot.id, ph.name)"
                 :key="entry.imageId"
-                class="ph-image-entry"
-                :class="{
-                  'ph-image-entry--active':   entry.imageId === phImagesStore.activeImageId,
-                  'ph-image-entry--dragging': entry.imageId === draggingPhImageId,
-                  'ph-image-entry--drag-over': entry.imageId === dragOverPhImageId && entry.imageId !== draggingPhImageId,
-                }"
-                draggable="true"
-                @click.stop="onImageThumbClick(slot.id, ph.name, entry.imageId)"
-                @dragstart.stop="onPhImageDragStart($event, entry.imageId, slot.id, ph.name)"
-                @dragend.stop="onPhImageDragEnd"
-                @dragover.prevent.stop="dragOverPhImageId = entry.imageId"
-                @dragleave.stop="dragOverPhImageId = null"
-                @drop.prevent.stop="onPhImageEntryDrop($event, slot.id, ph.name, entry.imageId)"
               >
-                <span
-                  class="ph-image-drag-handle"
-                  title="Drag to reorder or move to another placeholder"
+                <div
+                  v-if="entry.kind === 'image'"
+                  class="ph-image-entry"
+                  :class="{
+                    'ph-image-entry--active':   entry.imageId === phImagesStore.activeImageId,
+                    'ph-image-entry--dragging': entry.imageId === draggingPhImageId,
+                    'ph-image-entry--drag-over': entry.imageId === dragOverPhImageId && entry.imageId !== draggingPhImageId,
+                  }"
+                  draggable="true"
+                  @click.stop="onImageThumbClick(slot.id, ph.name, entry.imageId)"
+                  @dragstart.stop="onPhImageDragStart($event, entry.imageId, slot.id, ph.name)"
+                  @dragend.stop="onPhImageDragEnd"
+                  @dragover.prevent.stop="dragOverPhImageId = entry.imageId"
+                  @dragleave.stop="dragOverPhImageId = null"
+                  @drop.prevent.stop="onPhImageEntryDrop($event, slot.id, ph.name, entry.imageId)"
                 >
-                  <svg width="6" height="10" viewBox="0 0 6 10" fill="currentColor">
-                    <circle cx="1.5" cy="1.5" r="1.2"/>
-                    <circle cx="4.5" cy="1.5" r="1.2"/>
-                    <circle cx="1.5" cy="5"   r="1.2"/>
-                    <circle cx="4.5" cy="5"   r="1.2"/>
-                    <circle cx="1.5" cy="8.5" r="1.2"/>
-                    <circle cx="4.5" cy="8.5" r="1.2"/>
-                  </svg>
-                </span>
-                <img
-                  :src="entry.dataURL"
-                  class="ph-image-thumb"
-                  alt=""
-                />
-                <span class="ph-image-name">{{ entry.fileName }}</span>
-                <button
-                  class="ph-image-sync-btn"
-                  :class="{ 'ph-image-sync-btn--desynced': !entry.syncEnabled }"
-                  title="Sync image with slot viewport"
-                  @click.stop="phImagesStore.toggleImageSync(slot.id, ph.name, entry.imageId)"
+                  <span
+                    class="ph-image-drag-handle"
+                    title="Drag to reorder or move to another placeholder"
+                  >
+                    <svg width="6" height="10" viewBox="0 0 6 10" fill="currentColor">
+                      <circle cx="1.5" cy="1.5" r="1.2"/>
+                      <circle cx="4.5" cy="1.5" r="1.2"/>
+                      <circle cx="1.5" cy="5"   r="1.2"/>
+                      <circle cx="4.5" cy="5"   r="1.2"/>
+                      <circle cx="1.5" cy="8.5" r="1.2"/>
+                      <circle cx="4.5" cy="8.5" r="1.2"/>
+                    </svg>
+                  </span>
+                  <img
+                    :src="entry.dataURL"
+                    class="ph-image-thumb"
+                    alt=""
+                  />
+                  <span class="ph-image-name">{{ entry.fileName }}</span>
+                  <button
+                    class="ph-image-sync-btn"
+                    :class="{ 'ph-image-sync-btn--desynced': !entry.syncEnabled }"
+                    title="Sync image with slot viewport"
+                    @click.stop="phImagesStore.toggleImageSync(slot.id, ph.name, entry.imageId)"
+                  >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                      <path d="M15 7h2a5 5 0 0 1 0 10h-2m-6 0H7a5 5 0 0 1 0-10h2"/>
+                      <line x1="8" y1="12" x2="16" y2="12"/>
+                    </svg>
+                  </button>
+                  <button
+                    class="ph-image-clone-btn"
+                    title="Clone image"
+                    @click.stop="phImagesStore.cloneImage(slot.id, ph.name, entry.imageId)"
+                  >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="9" y="9" width="13" height="13" rx="2"/>
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                    </svg>
+                  </button>
+                  <button
+                    class="ph-image-remove"
+                    title="Remove image"
+                    @click.stop="phImagesStore.removeImage(slot.id, ph.name, entry.imageId)"
+                  >×</button>
+                </div>
+                <div
+                  v-else-if="entry.kind === 'spine'"
+                  class="ph-spine-entry"
+                  :class="{
+                    'ph-spine-entry--active':    slotSelectionStore.activeSlotId === entry.childSlotId,
+                    'ph-spine-entry--dragging':  entry.imageId === draggingPhSpineId,
+                    'ph-spine-entry--drag-over': entry.imageId === dragOverPhSpineId && entry.imageId !== draggingPhSpineId,
+                  }"
+                  draggable="true"
+                  @click.stop="slotSelectionStore.setActiveSlot(entry.childSlotId)"
+                  @dragstart.stop="onPhSpineDragStart($event, entry.imageId, slot.id, ph.name)"
+                  @dragend.stop="onPhSpineDragEnd"
+                  @dragover.prevent.stop="dragOverPhSpineId = entry.imageId"
+                  @dragleave.stop="dragOverPhSpineId = null"
+                  @drop.prevent.stop="onPhSpineEntryDrop($event, slot.id, ph.name, entry.imageId)"
                 >
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                    <path d="M15 7h2a5 5 0 0 1 0 10h-2m-6 0H7a5 5 0 0 1 0-10h2"/>
-                    <line x1="8" y1="12" x2="16" y2="12"/>
+                  <span class="ph-image-drag-handle" title="Drag to reorder or move to another placeholder">
+                    <svg width="6" height="10" viewBox="0 0 6 10" fill="currentColor">
+                      <circle cx="1.5" cy="1.5" r="1.2"/>
+                      <circle cx="4.5" cy="1.5" r="1.2"/>
+                      <circle cx="1.5" cy="5"   r="1.2"/>
+                      <circle cx="4.5" cy="5"   r="1.2"/>
+                      <circle cx="1.5" cy="8.5" r="1.2"/>
+                      <circle cx="4.5" cy="8.5" r="1.2"/>
+                    </svg>
+                  </span>
+                  <svg class="ph-spine-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/>
+                    <line x1="12" y1="2" x2="12" y2="22"/>
+                    <line x1="2" y1="8.5" x2="22" y2="8.5"/>
                   </svg>
-                </button>
-                <button
-                  class="ph-image-clone-btn"
-                  title="Clone image"
-                  @click.stop="phImagesStore.cloneImage(slot.id, ph.name, entry.imageId)"
-                >
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="9" y="9" width="13" height="13" rx="2"/>
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                  </svg>
-                </button>
-                <button
-                  class="ph-image-remove"
-                  title="Remove image"
-                  @click.stop="phImagesStore.removeImage(slot.id, ph.name, entry.imageId)"
-                >×</button>
-              </div>
+                  <span class="ph-spine-name">{{ entry.fileName }}</span>
+                  <button
+                    class="ph-image-sync-btn"
+                    :class="{ 'ph-image-sync-btn--desynced': !entry.syncEnabled }"
+                    title="Sync child spine with slot viewport"
+                    @click.stop="onSpineChildToggleSync(slot.id, ph.name, entry)"
+                  >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                      <path d="M15 7h2a5 5 0 0 1 0 10h-2m-6 0H7a5 5 0 0 1 0-10h2"/>
+                      <line x1="8" y1="12" x2="16" y2="12"/>
+                    </svg>
+                  </button>
+                  <button
+                    class="ph-image-clone-btn"
+                    :disabled="fileLoaderStore.spineSlots.length >= SPINE_SLOTS_LIMIT"
+                    title="Clone child spine"
+                    @click.stop="onSpineChildClone(slot.id, ph.name, entry)"
+                  >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="9" y="9" width="13" height="13" rx="2"/>
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                    </svg>
+                  </button>
+                  <button
+                    class="ph-image-remove"
+                    title="Remove child spine"
+                    @click.stop="onSpineChildRemove(slot.id, ph.name, entry)"
+                  >×</button>
+                </div>
+              </template>
             </div>
           </div>
         </div>
@@ -314,30 +379,37 @@
 </template>
 
 <script setup lang="ts">
-import { useLoaderStore, SPINE_SLOTS_LIMIT, PH_PENDING_SENTINEL } from '@/core/stores/useLoaderStore'
+import { useFileLoaderStore, SPINE_SLOTS_LIMIT, PH_PENDING_SENTINEL } from '@/core/stores/useFileLoaderStore'
+import { useSlotSelectionStore } from '@/core/stores/useSlotSelectionStore'
+import { useSlotUIStore } from '@/core/stores/useSlotUIStore'
 import { useAnimationStore } from '@/core/stores/useAnimationStore'
 import { useViewerStore } from '@/core/stores/useViewerStore'
 import { useBackgroundStore } from '@/core/stores/useBackgroundStore'
 import { useSkeletonStore } from '@/core/stores/useSkeletonStore'
 import { usePlaceholderImagesStore } from '@/core/stores/usePlaceholderImagesStore'
+import { useVersionStore } from '@/core/stores/useVersionStore'
 import { groupSpineFiles, readFileAsDataURL } from '@/core/utils/fileLoader'
 import { validateSpineFileSet } from '@/core/utils/spineValidator'
-import type { SpineSlot, SpineSlotSavedState } from '@/core/types/FileSet'
+import { detectSpineVersion, detectSpineVersionFromSkel, isCompatible } from '@/core/utils/versionDetector'
+import type { SpineSlot, SpineSlotSavedState, PHSpineEntry } from '@/core/types/FileSet'
 
-const loaderStore     = useLoaderStore()
+const fileLoaderStore    = useFileLoaderStore()
+const slotSelectionStore = useSlotSelectionStore()
+const slotUIStore        = useSlotUIStore()
 const animationStore  = useAnimationStore()
 const viewerStore     = useViewerStore()
 const backgroundStore = useBackgroundStore()
 const skeletonStore   = useSkeletonStore()
 const phImagesStore   = usePlaceholderImagesStore()
+const versionStore    = useVersionStore()
 
 // ── Placeholder image activation ────────────────────────────────────────────
 const pendingImageToActivate = ref<string | null>(null)
 
 function onImageThumbClick(slotId: string, _phName: string, imageId: string): void {
-  if (slotId !== loaderStore.activeSlotId) {
+  if (slotId !== slotSelectionStore.activeSlotId) {
     pendingImageToActivate.value = imageId
-    loaderStore.setActiveSlot(slotId)
+    slotSelectionStore.setActiveSlot(slotId)
     backgroundStore.setActive(false)
     const s = new Set(expandedSlots.value)
     s.add(slotId)
@@ -347,7 +419,7 @@ function onImageThumbClick(slotId: string, _phName: string, imageId: string): vo
   }
 }
 
-watch(() => loaderStore.activeSlotId, (newId) => {
+watch(() => slotSelectionStore.activeSlotId, (newId) => {
   if (!pendingImageToActivate.value || !newId) return
   const slotImages = phImagesStore.getSlotImages(newId)
   const exists = Object.values(slotImages).flat().some(e => e.imageId === pendingImageToActivate.value)
@@ -356,14 +428,17 @@ watch(() => loaderStore.activeSlotId, (newId) => {
 })
 
 // ── Global toolbar ───────────────────────────────────────────────────────────
+// Top-level slots only — child spines (parentSlotId set) are shown inside placeholder trees
+const visibleSlots = computed(() => fileLoaderStore.spineSlots.filter(s => !s.parentSlotId))
+
 const validSlots = computed(() =>
-  loaderStore.spineSlots.filter(s => !s.error && !(s.validationErrors?.length)),
+  fileLoaderStore.spineSlots.filter(s => !s.error && !(s.validationErrors?.length)),
 )
 
-const { globalSyncEnabled, globalPinEnabled, globalExpandEnabled } = storeToRefs(loaderStore)
+const { globalSyncEnabled, globalPinEnabled, globalExpandEnabled } = storeToRefs(slotUIStore)
 
 function slotHasTracks(slot: SpineSlot): boolean {
-  if (slot.id === loaderStore.activeSlotId) return animationStore.tracks.length > 0
+  if (slot.id === slotSelectionStore.activeSlotId) return animationStore.tracks.length > 0
   const s = slot.savedState
   if (!s) return false
   if (s.selectedAnimation) return true
@@ -379,13 +454,13 @@ const hasAnyPlaceholders = computed(() =>
 
 function toggleAllSync(): void {
   globalSyncEnabled.value = !globalSyncEnabled.value
-  for (const slot of validSlots.value) loaderStore.setSyncEnabled(slot.id, globalSyncEnabled.value)
+  for (const slot of validSlots.value) fileLoaderStore.setSyncEnabled(slot.id, globalSyncEnabled.value)
   phImagesStore.setAllImagesSync(globalSyncEnabled.value)
 }
 
 function toggleAllPin(): void {
   globalPinEnabled.value = !globalPinEnabled.value
-  for (const slot of slotsWithTracks.value) loaderStore.setPinned(slot.id, globalPinEnabled.value)
+  for (const slot of slotsWithTracks.value) slotSelectionStore.setPinned(slot.id, globalPinEnabled.value)
 }
 
 function toggleAllExpand(): void {
@@ -412,8 +487,8 @@ function toggleExpand(id: string): void {
 }
 
 function onExpandBtnClick(id: string): void {
-  if (id !== loaderStore.activeSlotId) {
-    loaderStore.setActiveSlot(id)
+  if (id !== slotSelectionStore.activeSlotId) {
+    slotSelectionStore.setActiveSlot(id)
     backgroundStore.setActive(false)
     const s = new Set(expandedSlots.value)
     s.add(id)
@@ -436,25 +511,136 @@ function setPhDragOver(slotId: string, phName: string, active: boolean): void {
 
 async function onPhDrop(e: DragEvent, slotId: string, phName: string): Promise<void> {
   phDragOverKey.value = null
+  // ph-spine reparent
+  const phSpineData = e.dataTransfer?.getData('application/x-ph-spine')
+  if (phSpineData) {
+    const { imageId, srcSlotId, srcPhName } = JSON.parse(phSpineData) as { imageId: string; srcSlotId: string; srcPhName: string }
+    if (srcSlotId !== slotId || srcPhName !== phName) {
+      phImagesStore.moveChild(srcSlotId, srcPhName, imageId, slotId, phName)
+      fileLoaderStore.patchSlotPlaceholderImages(srcSlotId, phImagesStore.getSlotImages(srcSlotId))
+      if (slotId !== slotSelectionStore.activeSlotId && !slotSelectionStore.isPinned(slotId)) {
+        fileLoaderStore.patchSlotPlaceholderImages(slotId, phImagesStore.getSlotImages(slotId))
+        slotSelectionStore.setActiveSlot(slotId)
+      }
+    }
+    return
+  }
   // ph-image reparent takes priority over file drop
   const phData = e.dataTransfer?.getData('application/x-ph-image')
   if (phData) {
     const { imageId, srcSlotId, srcPhName } = JSON.parse(phData) as { imageId: string; srcSlotId: string; srcPhName: string }
     if (srcSlotId !== slotId || srcPhName !== phName) {
-      phImagesStore.moveImage(srcSlotId, srcPhName, imageId, slotId, phName)
-      loaderStore.patchSlotPlaceholderImages(srcSlotId, phImagesStore.getSlotImages(srcSlotId))
-      if (slotId !== loaderStore.activeSlotId && !loaderStore.isPinned(slotId)) {
-        loaderStore.patchSlotPlaceholderImages(slotId, phImagesStore.getSlotImages(slotId))
-        loaderStore.setActiveSlot(slotId)
+      phImagesStore.moveChild(srcSlotId, srcPhName, imageId, slotId, phName)
+      fileLoaderStore.patchSlotPlaceholderImages(srcSlotId, phImagesStore.getSlotImages(srcSlotId))
+      if (slotId !== slotSelectionStore.activeSlotId && !slotSelectionStore.isPinned(slotId)) {
+        fileLoaderStore.patchSlotPlaceholderImages(slotId, phImagesStore.getSlotImages(slotId))
+        slotSelectionStore.setActiveSlot(slotId)
       }
     }
     return
   }
   const files = Array.from(e.dataTransfer?.files ?? [])
+  const spineExts = /\.(json|skel|atlas)$/i
+  const hasSpineFiles = files.some(f => spineExts.test(f.name))
+  if (hasSpineFiles) {
+    await handlePhSpineDrop(files, slotId, phName)
+    return
+  }
   const imageFiles = files.filter(f => f.type.startsWith('image/'))
   for (const file of imageFiles) {
     await phImagesStore.addImage(slotId, phName, file)
   }
+}
+
+async function handlePhSpineDrop(files: File[], slotId: string, phName: string): Promise<void> {
+  const result = await groupSpineFiles(files)
+  if (result.globalError) {
+    window.alert(result.globalError)
+    return
+  }
+  if (result.slots.length === 0 || result.slots[0].error) {
+    window.alert(result.slots[0]?.error ?? 'Could not load spine files')
+    return
+  }
+  const slot = result.slots[0]
+  const fileSet = slot.fileSet!
+  let detected = 'unknown'
+  if (fileSet.skeleton.type === 'skeleton-json') {
+    detected = detectSpineVersion(fileSet.skeleton.fileBody as string)
+  } else if (fileSet.skeleton.type === 'skeleton-skel') {
+    detected = detectSpineVersionFromSkel(fileSet.skeleton.fileBody as ArrayBuffer)
+  }
+  const globalVersion = versionStore.spineVersion
+  if (!globalVersion) {
+    window.alert('Select a Spine version before dropping child spines')
+    return
+  }
+  if (!isCompatible(detected, globalVersion)) {
+    window.alert(`Spine version mismatch: file is ${detected}, viewer is set to ${globalVersion}`)
+    return
+  }
+  if (fileLoaderStore.spineSlots.length >= SPINE_SLOTS_LIMIT) {
+    window.alert(`Cannot add more spines: limit of ${SPINE_SLOTS_LIMIT} reached`)
+    return
+  }
+  const childId = `slot-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+  fileLoaderStore.addSlot({
+    id: childId,
+    name: fileSet.skeleton.filename,
+    fileSet,
+    parentSlotId: slotId,
+  })
+  const entry: PHSpineEntry = {
+    kind: 'spine',
+    imageId: crypto.randomUUID(),
+    childSlotId: childId,
+    fileName: fileSet.skeleton.filename,
+    fileSet,
+    syncEnabled: true,
+    posX: 0,
+    posY: 0,
+    scale: 1,
+  }
+  phImagesStore.addSpineChild(slotId, phName, entry)
+}
+
+function checkAnyRef(childSlotId: string): boolean {
+  for (const phMap of Object.values(phImagesStore.children)) {
+    for (const entries of Object.values(phMap)) {
+      if (entries.some(e => e.kind === 'spine' && e.childSlotId === childSlotId)) return true
+    }
+  }
+  return false
+}
+
+function onSpineChildToggleSync(slotId: string, phName: string, entry: PHSpineEntry): void {
+  const newSync = !entry.syncEnabled
+  phImagesStore.toggleImageSync(slotId, phName, entry.imageId)
+  fileLoaderStore.setSyncEnabled(entry.childSlotId, newSync)
+}
+
+async function onSpineChildRemove(slotId: string, phName: string, entry: PHSpineEntry): Promise<void> {
+  // If the child spine slot is currently active, switch to the parent first and let
+  // the activeSlotId watcher run (with the child slot still in spineSlots) before
+  // removing the slot from the store. Without nextTick the watcher fires after the
+  // slot is already gone, prevSlot becomes null, and the parent adapter gets destroyed.
+  if (slotSelectionStore.activeSlotId === entry.childSlotId) {
+    slotSelectionStore.setActiveSlot(slotId)
+    await nextTick()
+  }
+  phImagesStore.removeSpineChild(slotId, phName, entry.imageId)
+  if (!checkAnyRef(entry.childSlotId)) {
+    fileLoaderStore.removeSlotCascade(entry.childSlotId)
+  }
+}
+
+function onSpineChildClone(slotId: string, phName: string, entry: PHSpineEntry): void {
+  if (fileLoaderStore.spineSlots.length >= SPINE_SLOTS_LIMIT) return
+  const srcSlot = fileLoaderStore.spineSlots.find(s => s.id === entry.childSlotId)
+  if (!srcSlot?.fileSet) return
+  const newChildId = `slot-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+  fileLoaderStore.addSlot({ id: newChildId, name: entry.fileName, fileSet: srcSlot.fileSet, parentSlotId: slotId, syncEnabled: false })
+  phImagesStore.cloneSpineChild(slotId, phName, entry.imageId, newChildId)
 }
 
 // ── Placeholder image drag & drop ────────────────────────────────────────────
@@ -487,14 +673,54 @@ function onPhImageEntryDrop(e: DragEvent, dstSlotId: string, dstPhName: string, 
     if (srcIdx === -1 || dstIdx === -1 || srcIdx === dstIdx) return
     entries.splice(srcIdx, 1)
     entries.splice(dstIdx, 0, srcImageId)
-    phImagesStore.reorderImages(srcSlotId, srcPhName, entries)
+    phImagesStore.reorderChildren(srcSlotId, srcPhName, entries)
   } else {
     // Different placeholder → reparent
-    phImagesStore.moveImage(srcSlotId, srcPhName, srcImageId, dstSlotId, dstPhName)
-    loaderStore.patchSlotPlaceholderImages(srcSlotId, phImagesStore.getSlotImages(srcSlotId))
-    if (dstSlotId !== loaderStore.activeSlotId && !loaderStore.isPinned(dstSlotId)) {
-      loaderStore.patchSlotPlaceholderImages(dstSlotId, phImagesStore.getSlotImages(dstSlotId))
-      loaderStore.setActiveSlot(dstSlotId)
+    phImagesStore.moveChild(srcSlotId, srcPhName, srcImageId, dstSlotId, dstPhName)
+    fileLoaderStore.patchSlotPlaceholderImages(srcSlotId, phImagesStore.getSlotImages(srcSlotId))
+    if (dstSlotId !== slotSelectionStore.activeSlotId && !slotSelectionStore.isPinned(dstSlotId)) {
+      fileLoaderStore.patchSlotPlaceholderImages(dstSlotId, phImagesStore.getSlotImages(dstSlotId))
+      slotSelectionStore.setActiveSlot(dstSlotId)
+    }
+  }
+}
+
+// ── Placeholder spine drag & drop ────────────────────────────────────────────
+const draggingPhSpineId = ref<string | null>(null)
+const dragOverPhSpineId = ref<string | null>(null)
+
+function onPhSpineDragStart(e: DragEvent, imageId: string, slotId: string, phName: string): void {
+  draggingPhSpineId.value = imageId
+  e.dataTransfer!.effectAllowed = 'move'
+  e.dataTransfer!.setData('application/x-ph-spine', JSON.stringify({ imageId, srcSlotId: slotId, srcPhName: phName }))
+}
+
+function onPhSpineDragEnd(): void {
+  draggingPhSpineId.value = null
+  dragOverPhSpineId.value = null
+}
+
+function onPhSpineEntryDrop(e: DragEvent, dstSlotId: string, dstPhName: string, dstSpineId: string): void {
+  dragOverPhSpineId.value = null
+  const phData = e.dataTransfer?.getData('application/x-ph-spine')
+  if (!phData) return
+  const { imageId: srcImageId, srcSlotId, srcPhName } = JSON.parse(phData) as { imageId: string; srcSlotId: string; srcPhName: string }
+  if (srcImageId === dstSpineId) return
+
+  if (srcSlotId === dstSlotId && srcPhName === dstPhName) {
+    const entries = phImagesStore.getPlaceholderImages(srcSlotId, srcPhName).map(en => en.imageId)
+    const srcIdx = entries.indexOf(srcImageId)
+    const dstIdx = entries.indexOf(dstSpineId)
+    if (srcIdx === -1 || dstIdx === -1 || srcIdx === dstIdx) return
+    entries.splice(srcIdx, 1)
+    entries.splice(dstIdx, 0, srcImageId)
+    phImagesStore.reorderChildren(srcSlotId, srcPhName, entries)
+  } else {
+    phImagesStore.moveChild(srcSlotId, srcPhName, srcImageId, dstSlotId, dstPhName)
+    fileLoaderStore.patchSlotPlaceholderImages(srcSlotId, phImagesStore.getSlotImages(srcSlotId))
+    if (dstSlotId !== slotSelectionStore.activeSlotId && !slotSelectionStore.isPinned(dstSlotId)) {
+      fileLoaderStore.patchSlotPlaceholderImages(dstSlotId, phImagesStore.getSlotImages(dstSlotId))
+      slotSelectionStore.setActiveSlot(dstSlotId)
     }
   }
 }
@@ -504,8 +730,8 @@ function isSlotError(slot: SpineSlot): boolean {
   return !!slot.error || !!(slot.validationErrors?.length)
 }
 
-const validCount = computed(() => loaderStore.spineSlots.filter(s => !isSlotError(s)).length)
-const errorCount = computed(() => loaderStore.spineSlots.filter(s =>  isSlotError(s)).length)
+const validCount = computed(() => fileLoaderStore.spineSlots.filter(s => !isSlotError(s)).length)
+const errorCount = computed(() => fileLoaderStore.spineSlots.filter(s =>  isSlotError(s)).length)
 
 // ── Background ────────────────────────────────────────────────────────────────
 function onActivateBackground() {
@@ -514,12 +740,12 @@ function onActivateBackground() {
 
 // ── Clone ────────────────────────────────────────────────────────────────────
 function onClone(id: string) {
-  const src = loaderStore.spineSlots.find(s => s.id === id)
+  const src = fileLoaderStore.spineSlots.find(s => s.id === id)
   if (!src || src.error) return
 
   // Only flush live state when cloning the active slot — for inactive slots
   // the saved state already reflects their last known state correctly.
-  if (id === loaderStore.activeSlotId) {
+  if (id === slotSelectionStore.activeSlotId) {
     const liveState: SpineSlotSavedState = {
       speed:               animationStore.speed,
       selectedAnimation:   animationStore.selectedAnimation,
@@ -536,12 +762,12 @@ function onClone(id: string) {
       indPosY:             src.indPosY ?? 0,
       indZoom:             src.indZoom ?? 1,
     }
-    loaderStore.saveSlotState(id, liveState)
+    fileLoaderStore.saveSlotState(id, liveState)
   }
 
-  const newSlot = loaderStore.cloneSlot(id)
+  const newSlot = fileLoaderStore.cloneSlot(id)
   if (!newSlot) return
-  loaderStore.setActiveSlot(newSlot.id)
+  slotSelectionStore.setActiveSlot(newSlot.id)
 }
 
 // ── Drag-and-drop reorder ────────────────────────────────────────────────────
@@ -623,7 +849,7 @@ function onDrop(e: DragEvent, toIndex: number) {
     }
   }
 
-  loaderStore.reorderSlots(src, target)
+  fileLoaderStore.reorderSlots(src, target)
   dragSrcIndex.value  = null
   dragOverIndex.value = null
 }
@@ -672,7 +898,7 @@ async function handleDroppedFiles(files: File[]): Promise<void> {
       if (!ok) return
     }
     backgroundStore.set({ dataUrl, width: img.naturalWidth, height: img.naturalHeight })
-    backgroundStore.setListIndex(loaderStore.spineSlots.length)
+    backgroundStore.setListIndex(fileLoaderStore.spineSlots.length)
     return
   }
 
@@ -689,9 +915,9 @@ async function handleDroppedFiles(files: File[]): Promise<void> {
         const errs = validateSpineFileSet(slot.fileSet)
         if (errs.length > 0) slot.validationErrors = errs
       }
-      loaderStore.addSlot(slot)
+      fileLoaderStore.addSlot(slot)
       if (!slot.error) {
-        if (inheritDesync) loaderStore.setSyncEnabled(slot.id, false)
+        if (inheritDesync) fileLoaderStore.setSyncEnabled(slot.id, false)
         if (inheritExpand && slot.placeholders?.some(p => p.kind === 'slot')) {
           const s = new Set(expandedSlots.value)
           s.add(slot.id)
@@ -708,7 +934,7 @@ defineExpose({ handleDroppedFiles })
 function isModified(slot: SpineSlot): boolean {
   if (slot.error) return false
 
-  if (slot.id === loaderStore.activeSlotId) {
+  if (slot.id === slotSelectionStore.activeSlotId) {
     return (
       Object.keys(animationStore.trackPlaylists).length > 0 ||
       animationStore.speed !== 1 ||
@@ -737,27 +963,27 @@ function isModified(slot: SpineSlot): boolean {
 function modifiedHint(slot: SpineSlot): string {
   const parts: string[] = []
 
-  const playlists = slot.id === loaderStore.activeSlotId
+  const playlists = slot.id === slotSelectionStore.activeSlotId
     ? animationStore.trackPlaylists
     : slot.savedState?.trackPlaylists ?? {}
 
-  const speed = slot.id === loaderStore.activeSlotId
+  const speed = slot.id === slotSelectionStore.activeSlotId
     ? animationStore.speed
     : (slot.savedState?.speed ?? 1)
 
-  const syncEnabled = slot.id === loaderStore.activeSlotId
+  const syncEnabled = slot.id === slotSelectionStore.activeSlotId
     ? (slot.syncEnabled !== false)
     : (slot.savedState?.syncEnabled !== false)
 
-  const indZoom = slot.id === loaderStore.activeSlotId
+  const indZoom = slot.id === slotSelectionStore.activeSlotId
     ? (slot.indZoom ?? 1)
     : (slot.savedState?.indZoom ?? 1)
 
-  const indPosX = slot.id === loaderStore.activeSlotId
+  const indPosX = slot.id === slotSelectionStore.activeSlotId
     ? (slot.indPosX ?? 0)
     : (slot.savedState?.indPosX ?? 0)
 
-  const indPosY = slot.id === loaderStore.activeSlotId
+  const indPosY = slot.id === slotSelectionStore.activeSlotId
     ? (slot.indPosY ?? 0)
     : (slot.savedState?.indPosY ?? 0)
 
@@ -1288,5 +1514,59 @@ function modifiedHint(slot: SpineSlot): string {
 .ph-image-remove:hover {
   background: rgba(248, 113, 113, 0.2);
   color: #f87171;
+}
+
+/* Child prefix in main spine list */
+.spine-child-prefix {
+  flex-shrink: 0;
+  margin-left: 4px;
+  color: var(--c-text-ghost);
+  font-size: 0.75rem;
+}
+
+/* PHSpineEntry row */
+.ph-spine-entry {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(157, 143, 255, 0.04);
+  cursor: grab;
+}
+
+.ph-spine-entry:active {
+  cursor: grabbing;
+}
+
+.ph-spine-icon {
+  flex-shrink: 0;
+  color: #9d8fff;
+}
+
+.ph-spine-name {
+  flex: 1;
+  font-size: 0.7rem;
+  color: var(--c-text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ph-spine-entry--active {
+  background: rgba(157, 143, 255, 0.08);
+}
+
+.ph-spine-entry--active .ph-spine-icon {
+  color: #b8aaff;
+}
+
+.ph-spine-entry--dragging {
+  opacity: 0.4;
+}
+
+.ph-spine-entry--drag-over {
+  outline: 1px dashed var(--c-text-ghost);
+  border-radius: 3px;
 }
 </style>

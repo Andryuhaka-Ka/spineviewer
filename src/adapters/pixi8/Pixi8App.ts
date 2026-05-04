@@ -92,8 +92,10 @@ export class Pixi8App implements IPixiApp {
     return sprite
   }
 
-  setSortableChildren(_enabled: boolean): void {
-    // Pixi8 Container does not have sortableChildren — no-op (children are z-ordered by addChild order)
+  setSortableChildren(enabled: boolean): void {
+    // sortableChildren is not declared in Pixi 8 TS types but exists at runtime (same as Pixi 7).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(this._app.stage as any).sortableChildren = enabled
   }
 
   addToStage(child: unknown): void {

@@ -47,7 +47,7 @@ import CompareToolbar    from './CompareToolbar.vue'
 import CompareSplitStage from './CompareSplitStage.vue'
 import CompareDiffPanel  from './CompareDiffPanel.vue'
 import { useCompareStore } from '@/core/stores/useCompareStore'
-import { useLoaderStore } from '@/core/stores/useLoaderStore'
+import { useFileLoaderStore } from '@/core/stores/useFileLoaderStore'
 import { useSkeletonStore } from '@/core/stores/useSkeletonStore'
 import { useAnimationStore } from '@/core/stores/useAnimationStore'
 import { useExportStore } from '@/core/stores/useExportStore'
@@ -63,8 +63,8 @@ const emit = defineEmits<{ back: [] }>()
 
 // ── Stores ─────────────────────────────────────────────────────────────────────
 
-const compareStore   = useCompareStore()
-const loaderStore    = useLoaderStore()
+const compareStore    = useCompareStore()
+const fileLoaderStore = useFileLoaderStore()
 const skeletonStore  = useSkeletonStore()
 const animationStore = useAnimationStore()
 const exportStore    = useExportStore()
@@ -145,7 +145,7 @@ function onClickBack() {
   compareStore.reset()
   skeletonStore.clear()
   animationStore.reset()
-  loaderStore.clear()
+  fileLoaderStore.clear()
   exportStore.finish()
   emit('back')
 }
@@ -154,13 +154,13 @@ function onClickBack() {
 
 onMounted(() => {
   if (props.initLeftSlotIndex !== undefined) {
-    const slot = loaderStore.spineSlots[props.initLeftSlotIndex]
+    const slot = fileLoaderStore.spineSlots[props.initLeftSlotIndex]
     if (slot && !slot.error) {
       compareStore.setLeft({ source: 'loaded', slotIndex: props.initLeftSlotIndex, label: slot.name })
     }
   }
   if (props.initRightSlotIndex !== undefined) {
-    const slot = loaderStore.spineSlots[props.initRightSlotIndex]
+    const slot = fileLoaderStore.spineSlots[props.initRightSlotIndex]
     if (slot && !slot.error) {
       compareStore.setRight({ source: 'loaded', slotIndex: props.initRightSlotIndex, label: slot.name })
     }
