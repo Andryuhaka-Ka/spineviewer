@@ -716,6 +716,12 @@ onMounted(async () => {
             freeBones:  childAdapterRef.getFreeBones(),
           })
           childAdapterRef.onEvent(e => eventsStore.push(e))
+          if (newSlot.fileSet && typeof newSlot.fileSet.atlas.fileBody === 'string') {
+            atlasStore.load(newSlot.fileSet.atlas.fileBody, newSlot.fileSet.images)
+          } else {
+            atlasStore.clear()
+          }
+          if (newSlot.fileSet) complexityStore.analyze(childAdapterRef, newSlot.fileSet, atlasStore.pages)
 
           const liveChildStates = childAdapterRef.getTrackStates()
           const liveChildPlaylists: Record<number, Array<{ animationName: string; loop: boolean }>> = {}

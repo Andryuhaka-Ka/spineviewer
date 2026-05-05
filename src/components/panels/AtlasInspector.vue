@@ -243,6 +243,7 @@ const loadingBitmap  = ref(false)
 
 // ── rAF scheduler ─────────────────────────────────────────────────────────────
 let rafId: number | null = null
+let initialFitTimer: ReturnType<typeof setTimeout> | null = null
 function scheduleDraw() {
   if (rafId !== null) return
   rafId = requestAnimationFrame(() => {
@@ -486,12 +487,21 @@ watch(() => atlasStore.seenRegions, scheduleDraw)
 
 // ── Modal open/close ──────────────────────────────────────────────────────────
 async function openModal() {
+  if (initialFitTimer) { clearTimeout(initialFitTimer); initialFitTimer = null }
   modalOpen.value = true
   await nextTick()
   resizeCanvas()
   await loadPage(pageIndex.value)
-  fitToScreen()
+  if (cw > 0 && ch > 0) fitToScreen()
   scheduleDraw()
+  // Re-fit after NaiveUI modal transition completes (~300ms) to get correct canvas dimensions.
+  initialFitTimer = setTimeout(() => {
+    initialFitTimer = null
+    if (!modalOpen.value) return
+    resizeCanvas()
+    fitToScreen()
+    scheduleDraw()
+  }, 300)
 }
 
 async function setPage(i: number) {
@@ -632,6 +642,7 @@ function scrollListToRegion(name: string) {
 // ── Cleanup ───────────────────────────────────────────────────────────────────
 onUnmounted(() => {
   if (rafId !== null) cancelAnimationFrame(rafId)
+  if (initialFitTimer !== null) clearTimeout(initialFitTimer)
   window.removeEventListener('mousemove', onPanMove)
   for (const bm of bitmapCache.values()) bm.close()
   bitmapCache.clear()
