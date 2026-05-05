@@ -17,18 +17,22 @@ export function useViewerKeyboard(
   const animationStore = useAnimationStore()
 
   function onKeyDown(e: KeyboardEvent) {
-    const tag = (e.target as HTMLElement).tagName
-    if (tag === 'INPUT' || tag === 'TEXTAREA') return
+    const el = e.target as HTMLElement
+    const tag = el.tagName
+    // NaiveUI cascader renders a real <input> inside its trigger — do not bail out for
+    // those inputs so we can intercept Space and prevent the dropdown from opening.
+    const inCascader = !!el.closest?.('.n-cascader')
+    if ((tag === 'INPUT' || tag === 'TEXTAREA') && !inCascader) return
     // isComposing=true means an IME/dead-key sequence is in progress — ignore to avoid
     // misfires when switching to a non-Latin keyboard layout (e.g. Ukrainian/CJK)
     if (e.isComposing || e.keyCode === 229) return
 
-    // Space on focused interactive controls (checkbox, switch, button) would toggle them
-    // in addition to firing our shortcut. Stop propagation here (capture phase) so the
-    // control never receives the Space event — our handler takes over instead.
+    // Space on focused interactive controls (checkbox, switch, button, cascader) would
+    // toggle/open them in addition to firing our shortcut. Stop propagation here
+    // (capture phase) so the control never receives the Space event — our handler takes over.
     if (e.code === 'Space') {
-      const role = (e.target as HTMLElement).getAttribute?.('role') ?? ''
-      if (role === 'checkbox' || role === 'switch' || role === 'button') {
+      const role = el.getAttribute?.('role') ?? ''
+      if (role === 'checkbox' || role === 'switch' || role === 'button' || role === 'combobox' || inCascader) {
         e.stopPropagation()
       }
     }
@@ -71,8 +75,10 @@ export function useViewerKeyboard(
   // so keydown stopPropagation alone is not enough).
   function onKeyUpCapture(e: KeyboardEvent) {
     if (e.code !== 'Space') return
-    const role = (e.target as HTMLElement).getAttribute?.('role') ?? ''
-    if (role === 'checkbox' || role === 'switch' || role === 'button') {
+    const el = e.target as HTMLElement
+    const role = el.getAttribute?.('role') ?? ''
+    const inCascader = !!el.closest?.('.n-cascader')
+    if (role === 'checkbox' || role === 'switch' || role === 'button' || role === 'combobox' || inCascader) {
       e.stopPropagation()
       e.preventDefault()
     }

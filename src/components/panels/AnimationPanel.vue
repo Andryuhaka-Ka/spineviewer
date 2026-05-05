@@ -469,6 +469,8 @@ function onCascaderSelect(value: string | number | Array<string | number> | null
   } else {
     emit('setAnimation', animationStore.currentTrack, name, animationStore.loop)
   }
+  // Blur cascader after selection so Space hotkey (play/pause) is not intercepted by the dropdown.
+  ;(document.activeElement as HTMLElement | null)?.blur()
 }
 
 </script>

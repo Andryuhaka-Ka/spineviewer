@@ -1056,6 +1056,7 @@ onMounted(async () => {
                 }
               }
               adapter.setTimeScale(ss.wasPlaying ? ss.speed : 0)
+              if (ss.selectedSkins?.length) adapter.setSkins(ss.selectedSkins)
               const _pinnedChildren = ss.placeholderChildren ?? ss.placeholderImages
               if (_pinnedChildren) {
                 const liveChildren = placeholderImagesStore.getSlotImages(slotId)
